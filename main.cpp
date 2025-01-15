@@ -1,71 +1,101 @@
 #include "main.h"
 
-// Motor Groups
-pros::MotorGroup intake ({19, -20}, pros::v5::MotorGears::blue);       
-pros::Motor ladybrown_Left (17, pros::v5::MotorGears::green);
-pros::Motor ladybrown_Right (18, pros::v5::MotorGears::green);
+// Motor constructors
+pros::Motor intake (-1, pros::v5::MotorGears::blue);  
+pros::Motor ladybrown_Left (18, pros::v5::MotorGears::green);
+pros::Motor ladybrown_Right (19, pros::v5::MotorGears::green);
 
-// Pneumatics
-pros::adi::Pneumatics mogoL ('A', false);
-pros::adi::Pneumatics mogoR ('B', false);
-pros::adi::Pneumatics colorSort ('C', false);
-ez::Piston doinker('D', false); // Used EZ Template piston commands
-ez::Piston hang('H', false);
+// Pneumatic constructors
+ez::Piston intakeLifter('A', false);            // Used EZ Template for toggle function
+pros::adi::Pneumatics mogoL ('B', false);
+pros::adi::Pneumatics mogoR ('C', false);
+ez::Piston doinker('D', false);                 // Used EZ Template for toggle function
 
-// Sensors
-pros::v5::Imu imu(16);
-pros::v5::Optical optical(6);
+// Sensor constructors
+pros::Imu imu(12);
 
+// Intake move function
 void setIntake(int intakePower){                                                   
-      intake.move(intakePower);
+  intake.move(intakePower);
+}
+
+// Ladybrown move function
+void setLB(int lbPower){
+  ladybrown_Right.move(lbPower);
+  ladybrown_Left.move(-lbPower);
+}
+
+// Simplify Ladybrown brake state
+void setLBbrake(){
+  ladybrown_Left.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+  ladybrown_Right.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+}
+
+// Extend mogo function
+void extendMogo(){
+  mogoL.retract();
+  mogoR.extend();
+}
+
+// Retract mogo function
+void retractMogo(){
+  mogoL.extend();
+  mogoR.retract();
 }
 
 // Chassis constructor
 ez::Drive chassis(
-    // Drive motors, the first motor is used for sensing!
-    {-9, -10},    // Left Chassis Ports (negative port will reverse it!)
-    {8, 7},       // Right Chassis Ports (negative port will reverse it!)
-    16,           // IMU Port
-    3.25,         // Wheel Diameter
-    600);         // Wheel RPM
+    
+    {-11, -9, 6},
+    {20, 7, -8}, 
 
-// All other competition modes are blocked by initialize; it is recommended
-// to keep execution time for this mode under a few seconds.
+    12,      // IMU Port
+    3.25,  // Wheel Diameter
+    450);   // Wheel RPM = cartridge * (motor gear / wheel gear)
+
+/**
+ * Runs initialization code. This occurs as soon as the program is started.
+ *
+ * All other competition modes are blocked by initialize; it is recommended
+ * to keep execution time for this mode under a few seconds.
+ */
 void initialize() {
 
   pros::delay(500);  // Stop the user from doing anything while legacy ports configure
 
   // Configure your chassis controls
-  chassis.opcontrol_curve_buttons_toggle(true);  // Enables modifying the controller curve with buttons on the joysticks
-  chassis.opcontrol_drive_activebrake_set(2);    // Sets the active brake kP. We recommend ~2.  0 will disable.
-  default_constants();                           // Set the drive to constants from autons.cpp
+  chassis.opcontrol_curve_buttons_toggle(true);   // Enables modifying the controller curve with buttons on the joysticks
+  chassis.opcontrol_drive_activebrake_set(0.0);   // Sets the active brake kP. We recommend ~2.  0 will disable.
+  chassis.opcontrol_curve_default_set(0.0, 0.0);  // Defaults for curve.
 
-  ladybrown_Left.tare_position();
-  ladybrown_Right.tare_position();
-
-  // These are already defaulted to these buttons, but you can change the left/right curve buttons here!
-  // chassis.opcontrol_curve_buttons_left_set(pros::E_CONTROLLER_DIGITAL_LEFT, pros::E_CONTROLLER_DIGITAL_RIGHT);
-  // chassis.opcontrol_curve_buttons_right_set(pros::E_CONTROLLER_DIGITAL_Y, pros::E_CONTROLLER_DIGITAL_A);
+  // Set default constants from autons.cpp
+  default_constants();
 
   // Autonomous Selector using LLEMU
   ez::as::auton_selector.autons_add({
-    Auton("AWP RED", newAWP_RED),
-    Auton("AWP BLUE", newAWP_BLUE), 
-    Auton("Blue Right Auton NO WALL STAKE", br_NOWS),
-    Auton("Blue Left Auton NO WALL STAKE", bl_NOWS),
-    Auton("Red Right Auton NO WALL STAKE", rr_NOWS),
-    Auton("Red Left Auton NO WALL STAKE", rl_NOWS),
-    Auton("Skills", skills),
-    Auton("EMERGENCY AUTON", EMERGENCY_AUTON),
-    Auton("REd stake", red_stake),
-    Auton("blue stake", blue_stake)
+      {"Blue Negative SAWP\n8 points total", blueSAWP},
+      {"Red Negative SAWP\n8 points total", redSAWP},
+      {"Skills", skills},
+      {"Drive\n\nDrive forward and come back", drive_example},
+      {"Turn\n\nTurn 3 times.", turn_example},
+      {"Drive and Turn\n\nDrive forward, turn, come back", drive_and_turn},
+      {"Drive and Turn\n\nSlow down during drive", wait_until_change_speed},
+      {"Swing Turn\n\nSwing in an 'S' curve", swing_example},
+      {"Motion Chaining\n\nDrive forward, turn, and come back, but blend everything together :D", motion_chaining},
+      {"Combine all 3 movements", combining_movements},
+      {"Interference\n\nAfter driving forward, robot performs differently if interfered or not", interfered_example},
+      {"Simple Odom\n\nThis is the same as the drive example, but it uses odom instead!", odom_drive_example},
+      {"Pure Pursuit\n\nGo to (0, 30) and pass through (6, 10) on the way.  Come back to (0, 0)", odom_pure_pursuit_example},
+      {"Pure Pursuit Wait Until\n\nGo to (24, 24) but start running an intake once the robot passes (12, 24)", odom_pure_pursuit_wait_until_example},
+      {"Boomerang\n\nGo to (0, 24, 45) then come back to (0, 0, 0)", odom_boomerang_example},
+      {"Boomerang Pure Pursuit\n\nGo to (0, 24, 45) on the way to (24, 24) then come back to (0, 0, 0)", odom_boomerang_injected_pure_pursuit_example},
+      {"Measure Offsets\n\nThis will turn the robot a bunch of times and calculate your offsets for your tracking wheels.", measure_offsets},
   });
 
   // Initialize chassis and auton selector
-  imu.reset();
   chassis.initialize();
   ez::as::initialize();
-  master.rumble(".");
+  master.rumble(chassis.drive_imu_calibrated() ? "." : "---");
 }
 
 /**
@@ -74,10 +104,7 @@ void initialize() {
  * the robot is enabled, this task will exit.
  */
 void disabled() {
-
-  // put in while true loop?
-  mogoR.extend();
-  mogoL.extend();
+  // . . .
 }
 
 /**
@@ -105,13 +132,116 @@ void competition_initialize() {
  * from where it left off.
  */
 void autonomous() {
-  
-  chassis.pid_targets_reset();                   // Resets PID targets to 0
-  chassis.drive_imu_reset();                     // Reset IMU to 0
-  chassis.drive_sensor_reset();                  // Reset drive sensors to 0
-  chassis.drive_brake_set(MOTOR_BRAKE_HOLD);     // Set motors to hold.  This helps autonomous consistency
+  chassis.pid_targets_reset();                // Resets PID targets to 0
+  chassis.drive_imu_reset();                  // Reset gyro position to 0
+  chassis.drive_sensor_reset();               // Reset drive sensors to 0
+  chassis.odom_xyt_set(0_in, 0_in, 0_deg);    // Set the current position, you can start at a specific position with this
+  chassis.drive_brake_set(MOTOR_BRAKE_HOLD);  // Set motors to hold.  This helps autonomous consistency
+
+  /*
+  Odometry and Pure Pursuit are not magic
+
+  It is possible to get perfectly consistent results without tracking wheels,
+  but it is also possible to have extremely inconsistent results without tracking wheels.
+  When you don't use tracking wheels, you need to:
+   - avoid wheel slip
+   - avoid wheelies
+   - avoid throwing momentum around (super harsh turns, like in the example below)
+  You can do cool curved motions, but you have to give your robot the best chance
+  to be consistent
+  */
 
   ez::as::auton_selector.selected_auton_call();  // Calls selected auton from autonomous selector
+}
+
+/**
+ * Simplifies printing tracker values to the brain screen
+ */
+void screen_print_tracker(ez::tracking_wheel *tracker, std::string name, int line) {
+  std::string tracker_value = "", tracker_width = "";
+  // Check if the tracker exists
+  if (tracker != nullptr) {
+    tracker_value = name + " tracker: " + util::to_string_with_precision(tracker->get());             // Make text for the tracker value
+    tracker_width = "  width: " + util::to_string_with_precision(tracker->distance_to_center_get());  // Make text for the distance to center
+  }
+  ez::screen_print(tracker_value + tracker_width, line);  // Print final tracker text
+}
+
+/**
+ * Ez screen task
+ * Adding new pages here will let you view them during user control or autonomous
+ * and will help you debug problems you're having
+ */
+void ez_screen_task() {
+  while (true) {
+    // Only run this when not connected to a competition switch
+    if (!pros::competition::is_connected()) {
+      // Blank page for odom debugging
+      if (chassis.odom_enabled() && !chassis.pid_tuner_enabled()) {
+        // If we're on the first blank page...
+        if (ez::as::page_blank_is_on(0)) {
+          // Display X, Y, and Theta
+          ez::screen_print("x: " + util::to_string_with_precision(chassis.odom_x_get()) +
+                               "\ny: " + util::to_string_with_precision(chassis.odom_y_get()) +
+                               "\na: " + util::to_string_with_precision(chassis.odom_theta_get()),
+                           1);  // Don't override the top Page line
+
+          // Display all trackers that are being used
+          screen_print_tracker(chassis.odom_tracker_left, "l", 4);
+          screen_print_tracker(chassis.odom_tracker_right, "r", 5);
+          screen_print_tracker(chassis.odom_tracker_back, "b", 6);
+          screen_print_tracker(chassis.odom_tracker_front, "f", 7);
+        }
+      }
+    }
+
+    // Remove all blank pages when connected to a comp switch
+    else {
+      if (ez::as::page_blank_amount() > 0)
+        ez::as::page_blank_remove_all();
+    }
+
+    pros::delay(ez::util::DELAY_TIME);
+  }
+}
+pros::Task ezScreenTask(ez_screen_task);
+
+/**
+ * Gives you some extras to run in your opcontrol:
+ * - run your autonomous routine in opcontrol by pressing DOWN and B
+ *   - to prevent this from accidentally happening at a competition, this
+ *     is only enabled when you're not connected to competition control.
+ * - gives you a GUI to change your PID values live by pressing X
+ */
+void ez_template_extras() {
+  // Only run this when not connected to a competition switch
+  if (!pros::competition::is_connected()) {
+    // PID Tuner
+    // - after you find values that you're happy with, you'll have to set them in auton.cpp
+
+    // Enable / Disable PID Tuner
+    //  When enabled:
+    //  * use A and Y to increment / decrement the constants
+    //  * use the arrow keys to navigate the constants
+    if (master.get_digital_new_press(DIGITAL_X))
+      chassis.pid_tuner_toggle();
+
+    // Trigger the selected autonomous routine
+    if (master.get_digital(DIGITAL_B) && master.get_digital(DIGITAL_X)) {
+      pros::motor_brake_mode_e_t preference = chassis.drive_brake_get();
+      autonomous();
+      chassis.drive_brake_set(preference);
+    }
+
+    // Allow PID Tuner to iterate
+    chassis.pid_tuner_iterate();
+  }
+
+  // Disable PID Tuner when connected to a comp switch
+  else {
+    if (chassis.pid_tuner_enabled())
+      chassis.pid_tuner_disable();
+  }
 }
 
 /**
@@ -127,91 +257,72 @@ void autonomous() {
  * operator control task will be stopped. Re-enabling the robot will restart the
  * task, not resume it from where it left off.
  */
-
 void opcontrol() {
   // This is preference to what you like to drive on
-  pros::motor_brake_mode_e_t driver_preference_brake = MOTOR_BRAKE_HOLD;
-  chassis.drive_brake_set(driver_preference_brake);
+  chassis.drive_brake_set(MOTOR_BRAKE_HOLD);
 
   while (true) {
-    // PID Tuner
-    // After you find values that you're happy with, you'll have to set them in auton.cpp
-    if (!pros::competition::is_connected()) {
-      // Enable / Disable PID Tuner
-      //  When enabled:
-      //  * use A and Y to increment / decrement the constants
-      //  * use the arrow keys to navigate the constants
-      if (master.get_digital(DIGITAL_X))
-        chassis.pid_tuner_toggle();
+    // Gives you some extras to make EZ-Template ezier
+    ez_template_extras();
 
-      // Trigger the selected autonomous routine
-      if (master.get_digital(DIGITAL_B)) {
-        autonomous();
-        pros::delay(1000);
-        chassis.drive_brake_set(driver_preference_brake);
-      }
+    chassis.opcontrol_arcade_standard(ez::SPLIT);
 
-      chassis.pid_tuner_iterate();  // Allow PID Tuner to iterate
-    }
-
-    chassis.opcontrol_arcade_standard(ez::SPLIT);   // Standard split arcade
-
-    // Set up OP controls for INTAKE                                                                // COMMENT BACK IN
+    // Set up OP controls for INTAKE                                                         
     if (master.get_digital(DIGITAL_R1)){
-        setIntake(115);
+        setIntake(127);
     } else if (master.get_digital(DIGITAL_R2)){
-        setIntake(-115);
+        setIntake(-100);
     } else {
         setIntake(0);
     }
 
     // Set up OP controls for MOGO MECH
     if (master.get_digital(DIGITAL_L1)){
-        mogoL.extend();
-        mogoR.extend();
+      extendMogo();
     } else if (master.get_digital(DIGITAL_L2)){
-        mogoL.retract();
-        mogoR.retract();
+      retractMogo();
     }
 
-    // // Set up OP controls for LADYBROWN
+    // Set up OP controls for LADYBROWN
     if (master.get_digital(DIGITAL_DOWN)){
-      ladybrown_Left.move(-80);
-      ladybrown_Right.move(80);
+      setLB(-80);
     } else if (master.get_digital(DIGITAL_UP)){
-      if(ladybrown_Left.get_position() >= 1550){
-        ladybrown_Left.move(0);
-        ladybrown_Right.move(0);
-        ladybrown_Left.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-        ladybrown_Right.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-      } else {
-          ladybrown_Left.move(80);
-          ladybrown_Right.move(-80);
-      }
+        if(ladybrown_Right.get_position() >= 1800){
+          setLB(0);
+          setLBbrake();
+        } else {
+          setLB(80);
+        }
     } else if (master.get_digital(DIGITAL_RIGHT)){
-            ladybrown_Right.move_absolute(-350, 127);
-            ladybrown_Left.move_absolute(350, 127);
+      ladybrown_Right.move_absolute(425, 127);
+      ladybrown_Left.move_absolute(-425, 127);
     } else {
-      ladybrown_Left.move(0);
-      ladybrown_Right.move(0);
-      ladybrown_Left.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-      ladybrown_Right.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+      setLB(0);
+      setLBbrake();
+    }
+
+    // Set up OP controls to prepare ring for LB
+    if (master.get_digital(DIGITAL_Y)){
+      
+      for(int i = 0; i < 8; i++){ 
+        intake.move(127);
+        pros::delay(500);
+        intake.move(0);
+      }
+      
+      intake.move(-127);
+      pros::delay(50);
+      intake.move(0);
+      master.rumble(".");
     }
 
     // Set up OP controls for DOINKER
     doinker.button_toggle(master.get_digital(DIGITAL_A));
     pros::delay(10);
 
-    // Set up OP controls for HANG
-    hang.button_toggle(master.get_digital(DIGITAL_X));
+    // Set up OP controls for INTAKE LIFTER
+    intakeLifter.button_toggle(master.get_digital(DIGITAL_B));
     pros::delay(10);
-
-    // Set up OP controls for COLOR SORT
-    if(master.get_digital(DIGITAL_Y)){
-      colorSort.extend();
-      pros::delay(500);
-      colorSort.retract();
-    }
 
     pros::delay(ez::util::DELAY_TIME);  // This is used for timer calculations!  Keep this ez::util::DELAY_TIME
   }
