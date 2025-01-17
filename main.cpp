@@ -287,7 +287,7 @@ void opcontrol() {
     if (master.get_digital(DIGITAL_DOWN)){
       setLB(-80);
     } else if (master.get_digital(DIGITAL_UP)){
-        if(ladybrown_Right.get_position() >= 1800){
+        if(ladybrown_Right.get_position() >= 1980){
           setLB(0);
           setLBbrake();
         } else {
@@ -304,7 +304,7 @@ void opcontrol() {
     // Set up OP controls to prepare ring for LB
     if (master.get_digital(DIGITAL_Y)){
       
-      for(int i = 0; i < 8; i++){ 
+      for(int i = 0; i < 4; i++){ 
         intake.move(127);
         pros::delay(500);
         intake.move(0);
@@ -313,7 +313,7 @@ void opcontrol() {
       intake.move(-127);
       pros::delay(50);
       intake.move(0);
-      master.rumble(".");
+      master.rumble("-");
     }
 
     // Set up OP controls for DOINKER
