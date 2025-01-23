@@ -48,6 +48,33 @@ void default_constants() {
   chassis.pid_angle_behavior_set(ez::shortest);  // Changes the default behavior for turning, this defaults it to the shortest path there
 }
 
+void turnTest(){
+  chassis.pid_turn_set(90_deg, TURN_SPEED);
+  chassis.pid_wait();
+}
+
+void colorSort(){
+
+  // bool intakeStatus = true; 
+
+  while(true){
+    double hue = optical.get_hue();
+
+    if(hue > 200 && hue < 360){
+      intake.move(127);
+      pros::delay(100);
+
+      intake.move(0);
+      pros::delay(400);
+
+      intake.move(127);
+    } else {
+      intake.move(0);
+    }
+      pros::delay(10);
+  }  
+}
+
 void blueSAWP(){ // Blue SAWP
   DRIVE_SPEED = 110; 
 
@@ -134,7 +161,7 @@ void redSAWP(){ // Red SAWP
   DRIVE_SPEED = 110; 
 
   // Drive and turn to alliance stake
-  chassis.pid_drive_set(-7_in, DRIVE_SPEED);
+  chassis.pid_drive_set(-5_in, DRIVE_SPEED);
   chassis.pid_wait_quick_chain();
 
   chassis.pid_turn_set(90_deg, TURN_SPEED);
@@ -153,17 +180,19 @@ void redSAWP(){ // Red SAWP
   chassis.pid_wait_quick_chain();
 
   // Turn to mogo
-  chassis.pid_turn_set(-130_deg, TURN_SPEED);
+  chassis.pid_turn_set(-125_deg, TURN_SPEED);
   chassis.pid_wait();
 
   // Drive to and hold mogo
-  extendMogo();
-  chassis.pid_drive_set(-38_in, DRIVE_SPEED);
+  chassis.pid_drive_set(-40_in, DRIVE_SPEED);
   chassis.pid_wait_until(-13_in);
   chassis.pid_speed_max_set(60);
   chassis.pid_wait();
   pros::delay(200);
   retractMogo();
+
+  chassis.pid_drive_set(1_in, DRIVE_SPEED);
+  chassis.pid_wait_quick_chain();
 
   // Turn to 1-stack
   chassis.pid_turn_set(0_deg, TURN_SPEED);
@@ -175,7 +204,7 @@ void redSAWP(){ // Red SAWP
   chassis.pid_wait();
   
   // Turn to 4-stack
-  chassis.pid_turn_set(95_deg, TURN_SPEED);
+  chassis.pid_turn_set(91_deg, TURN_SPEED);
   chassis.pid_wait_until(90_deg);
 
   // Drive to and collect second ring
@@ -188,8 +217,8 @@ void redSAWP(){ // Red SAWP
   chassis.pid_wait_quick_chain();
 
   // Turn to third ring
-  chassis.pid_turn_set(65_deg, TURN_SPEED);
-  chassis.pid_wait_until(60_deg);
+  chassis.pid_turn_set(60_deg, TURN_SPEED);
+  chassis.pid_wait_until(55_deg);
 
   // Drive to and collect third ring
   chassis.pid_drive_set(14_in, 40);
@@ -203,7 +232,6 @@ void redSAWP(){ // Red SAWP
   // Turn towards ladder
   chassis.pid_turn_set(182_deg, TURN_SPEED);
   chassis.pid_wait_until(180_deg);
-  intake.move(0);
 
   // Drive to and touch ladder
   chassis.pid_drive_set(34_in, DRIVE_SPEED);
@@ -220,7 +248,7 @@ void skills(){
   intake.move(0);
 
   // Drive to position for mogo
-  chassis.pid_drive_set(7_in, DRIVE_SPEED);
+  chassis.pid_drive_set(6_in, DRIVE_SPEED);
   chassis.pid_wait_quick_chain();
 
   chassis.pid_turn_set(-90_deg, TURN_SPEED);
@@ -228,12 +256,13 @@ void skills(){
 
   // Drive to and hold mogo
   extendMogo();
-  chassis.pid_drive_set(-30_in, 40);
+  chassis.pid_drive_set(-25_in, 60);
   chassis.pid_wait_until(-15_in);
   retractMogo();
+  pros::delay(500);
 
   // Turn to first ring
-  chassis.pid_turn_set(0_deg, TURN_SPEED);
+  chassis.pid_turn_set(-10_deg, TURN_SPEED);
   chassis.pid_wait();
 
   // Drive to and collect first ring
@@ -242,38 +271,31 @@ void skills(){
   chassis.pid_wait_quick_chain();
 
   // Turn to second ring
+  pros::delay(500);
   chassis.pid_turn_set(90_deg, TURN_SPEED);
   chassis.pid_wait_quick_chain();
 
   // Drive to and collect second ring
-  chassis.pid_drive_set(30_in, DRIVE_SPEED);
+  chassis.pid_drive_set(20_in, DRIVE_SPEED);
   chassis.pid_wait_quick_chain();
 
   // Turn to third ring
-  chassis.pid_turn_set(0_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Drive to and collect third ring
-  chassis.pid_drive_set(18_in, DRIVE_SPEED);
-  chassis.pid_wait();
   pros::delay(500);
-
-  // Turn to fourth ring
   chassis.pid_turn_set(180_deg, TURN_SPEED);
   chassis.pid_wait_quick_chain();
   
-  // Drive to and collect fourth ring
-  chassis.pid_drive_set(38_in, DRIVE_SPEED);
+  // Drive to and collect third ring
+  chassis.pid_drive_set(25_in, DRIVE_SPEED);
   chassis.pid_wait();
   pros::delay(1000);
 
-  // Back up and turn to fifth ring
+  // Back up and turn to fourth ring
   chassis.pid_drive_set(-10_in, DRIVE_SPEED);
   chassis.pid_wait_quick_chain();
-  chassis.pid_turn_set(-155_deg, TURN_SPEED);
+  chassis.pid_turn_set(-150_deg, TURN_SPEED);
   chassis.pid_wait();
 
-  // Drive to and collect fifth ring
+  // Drive to and collect fourth ring
 
 
 }
