@@ -1,4 +1,6 @@
 #include "main.h"
+#include "pros/misc.h"
+#include "pros/rtos.hpp"
 
 // Motor constructors
 pros::Motor intake (-1, pros::v5::MotorGears::blue);  
@@ -14,11 +16,13 @@ ez::Piston doinker('D', false);                 // Used EZ Template for toggle f
 // Sensor constructors
 pros::Imu imu(12);
 pros::v5::Optical optical(10);
+pros::Rotation rSensor(17);
 
-// Intake move function
-void setIntake(int intakePower){                                                   
-  intake.move(intakePower);
-}
+// Ladybrown variables
+const int numStates = 3;
+int states[numStates] = {250, 2600, 16000};      // Remember: centidegrees
+int currState = 0;
+int target = 0;
 
 // Ladybrown move function
 void setLB(int lbPower){
@@ -30,6 +34,27 @@ void setLB(int lbPower){
 void setLBbrake(){
   ladybrown_Left.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
   ladybrown_Right.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+}
+
+// Cycles through states array when called
+void nextState() {
+    currState += 1;
+    if (currState == numStates) {
+        currState = 0;
+    }
+    target = states[currState];
+}
+
+// Set up Ladybrown PID & controls velocity 
+void liftControl() {
+    double kp = 2;
+    setLB(kp * (target - rSensor.get_position())/100.0);
+    setLBbrake();
+}
+
+// Intake move function
+void setIntake(int intakePower){                                                   
+  intake.move(intakePower);
 }
 
 // Extend mogo function
@@ -86,6 +111,14 @@ void initialize() {
   master.rumble(chassis.drive_imu_calibrated() ? "." : "---");
 
   extendMogo();
+
+  // Ladybrown Lift Task
+  pros::Task liftControlTask([]{
+    while (true) {
+      liftControl();
+      pros::delay(10);
+    }
+  });
 }
 
 /**
@@ -142,6 +175,8 @@ void autonomous() {
   */
 
   ez::as::auton_selector.selected_auton_call();  // Calls selected auton from autonomous selector
+
+
 }
 
 /**
@@ -273,27 +308,8 @@ void opcontrol() {
       retractMogo();
     }
 
-    // Set up OP controls for LADYBROWN
-    if (master.get_digital(DIGITAL_DOWN)){
-      setLB(-80);
-    } else if (master.get_digital(DIGITAL_UP)){
-        if(ladybrown_Right.get_position() >= 1980){
-          setLB(0);
-          setLBbrake();
-        } else {
-          setLB(80);
-        }
-    } else if (master.get_digital(DIGITAL_RIGHT)){
-      ladybrown_Right.move_absolute(425, 127);
-      ladybrown_Left.move_absolute(-425, 127);
-    } else {
-      setLB(0);
-      setLBbrake();
-    }
-
     // Set up OP controls to prepare ring for LB
     if (master.get_digital(DIGITAL_Y)){
-      
       for(int i = 0; i < 4; i++){ 
         intake.move(127);
         pros::delay(500);
@@ -313,6 +329,12 @@ void opcontrol() {
     // Set up OP controls for INTAKE LIFTER
     intakeLifter.button_toggle(master.get_digital(DIGITAL_B));
     pros::delay(10);
+
+    // Set up OP controls for Ladybrown lift task
+    if (master.get_digital_new_press(DIGITAL_RIGHT)) {
+			nextState();
+      pros::delay(20);
+		}
 
     pros::delay(ez::util::DELAY_TIME);  // This is used for timer calculations!  Keep this ez::util::DELAY_TIME
   }
