@@ -6,7 +6,6 @@ void blueSAWP();
 void redSAWP();
 void skills();
 void turnTest();
-void colorSort();
 
 extern pros::adi::Pneumatics mogoL;
 extern pros::adi::Pneumatics mogoR;
