@@ -74,6 +74,7 @@ void blueSAWP(){ // Blue SAWP
   chassis.pid_wait();
   pros::delay(200);
   retractMogo();
+  pros::delay(500);
 
   // Turn to 1-stack
   chassis.pid_turn_set(0_deg, TURN_SPEED);
@@ -156,6 +157,7 @@ void redSAWP(){ // Red SAWP
   chassis.pid_wait();
   pros::delay(200);
   retractMogo();
+  pros::delay(500);
 
   // Turn to 1-stack
   chassis.pid_turn_set(0_deg, TURN_SPEED);
@@ -184,7 +186,7 @@ void redSAWP(){ // Red SAWP
   chassis.pid_wait_until(60_deg);
 
   // Drive to and collect third ring
-  chassis.pid_drive_set(14_in, 40);
+  chassis.pid_drive_set(13_in, 40);
   chassis.pid_wait();
   pros::delay(500);
 
