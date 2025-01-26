@@ -20,7 +20,7 @@ pros::Rotation rSensor(17);
 
 // Ladybrown variables
 const int numStates = 3;
-int states[numStates] = {250, 2600, 16000};      // Remember: centidegrees
+int states[numStates] = {250, 2700, 16000};      // Remember: centidegrees
 int currState = 0;
 int target = 0;
 
@@ -306,20 +306,6 @@ void opcontrol() {
       extendMogo();
     } else if (master.get_digital(DIGITAL_L2)){
       retractMogo();
-    }
-
-    // Set up OP controls to prepare ring for LB
-    if (master.get_digital(DIGITAL_Y)){
-      for(int i = 0; i < 4; i++){ 
-        intake.move(127);
-        pros::delay(500);
-        intake.move(0);
-      }
-      
-      intake.move(-127);
-      pros::delay(50);
-      intake.move(0);
-      master.rumble("-");
     }
 
     // Set up OP controls for DOINKER
