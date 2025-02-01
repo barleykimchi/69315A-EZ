@@ -22,7 +22,7 @@ pros::Controller master(pros::E_CONTROLLER_MASTER);
 
 // Ladybrown variables
 const int NUM_STATES = 3;
-int states[NUM_STATES] = {250, 2900, 16000};      // Remember: centidegrees
+int states[NUM_STATES] = {250, 2800, 16000};      // Remember: centidegrees
 int currState = 0;
 int target = 0;
 
@@ -310,49 +310,6 @@ void opcontrol() {
     ez_template_extras();
 
     chassis.opcontrol_arcade_standard(ez::SPLIT);
-
-  // Controller auton toggle
-    // if(!pros::competition::is_connected()){
-    //   if(master.get_digital_new_press(DIGITAL_UP)){
-    //     currAuton++;
-
-    //     // Wrap around to first item in array
-    //     if(currAuton >= NUM_AUTONS){
-    //       currAuton = 0;
-    //     }
-
-    //     master.rumble(".");
-    //   }
-
-    //   if(master.get_digital_new_press(DIGITAL_DOWN)){
-    //     currAuton--;
-
-    //     if(currAuton < 0){
-    //       currAuton = NUM_AUTONS - 1;
-    //     }
-
-    //     master.rumble(".");
-    //   }
-
-    //   master.set_text(0, 0, "Auton: " + allAutons[currAuton]);
-
-    //   if(master.get_digital_new_press(DIGITAL_X) && master.get_digital_new_press(DIGITAL_B)){
-    //     switch(currAuton){
-    //       case 0:
-    //         turnTest();
-    //         break;
-    //       case 1:
-    //         redSAWP();
-    //         break;
-    //       case 2:
-    //         blueSAWP();
-    //         break;
-    //       case 3:
-    //         skills();
-    //         break;
-    //     }
-    //   }
-    // }
 
     // Set up OP controls for INTAKE                                                         
     if (master.get_digital(DIGITAL_R1)){
