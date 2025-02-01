@@ -15,12 +15,14 @@ ez::Piston doinker('D', false);                 // Used EZ Template for toggle f
 
 // Sensor constructors
 pros::Imu imu(12);
-pros::v5::Optical optical(10);
+pros::v5::Optical oSensor(10);
 pros::Rotation rSensor(17);
 
+pros::Controller master(pros::E_CONTROLLER_MASTER);
+
 // Ladybrown variables
-const int numStates = 3;
-int states[numStates] = {250, 2700, 16000};      // Remember: centidegrees
+const int NUM_STATES = 3;
+int states[NUM_STATES] = {250, 2900, 16000};      // Remember: centidegrees
 int currState = 0;
 int target = 0;
 
@@ -39,7 +41,7 @@ void setLBbrake(){
 // Cycles through states array when called
 void nextState() {
     currState += 1;
-    if (currState == numStates) {
+    if (currState == NUM_STATES) {
         currState = 0;
     }
     target = states[currState];
@@ -68,6 +70,39 @@ void retractMogo(){
   mogoL.extend();
   mogoR.retract();
 }
+
+// Color Sort Task Variables
+int targetHue = 220;
+const int HUE_TOLERANCE = 10;
+bool sorterEnabled = false;
+
+// Color Sort Task Function
+void sortBlueTask(void* param){
+  while(true){
+    if(sorterEnabled){
+      oSensor.set_led_pwm(100);
+      int currHue = oSensor.get_hue();
+      master.set_text(2, 0, "Color Sort: On ");
+
+      if(abs(currHue - targetHue) <= HUE_TOLERANCE){
+        setIntake(127);
+        pros::delay(60);
+        setIntake(0);
+        pros::delay(700);
+        setIntake(127);
+      }
+
+    } else {
+      master.set_text(2, 0, "Color Sort: Off");
+    }
+    pros::delay(20);
+  }
+}
+
+// Move intake back button (Make into jammer)
+bool intakeMovingBackward = false;
+double intakeTargetPosition = 0;  // Target position in encoder units
+const double intakeBackwardDistance = 30.0;  // Distance to move backward (in encoder units, adjust as needed)
 
 // Chassis constructor
 ez::Drive chassis(
@@ -119,6 +154,9 @@ void initialize() {
       pros::delay(10);
     }
   });
+
+  pros::Task sortBlueTaskHandler(sortBlueTask);
+
 }
 
 /**
@@ -175,21 +213,6 @@ void autonomous() {
   */
 
   ez::as::auton_selector.selected_auton_call();  // Calls selected auton from autonomous selector
-
-
-}
-
-/**
- * Simplifies printing tracker values to the brain screen
- */
-void screen_print_tracker(ez::tracking_wheel *tracker, std::string name, int line) {
-  std::string tracker_value = "", tracker_width = "";
-  // Check if the tracker exists
-  if (tracker != nullptr) {
-    tracker_value = name + " tracker: " + util::to_string_with_precision(tracker->get());             // Make text for the tracker value
-    tracker_width = "  width: " + util::to_string_with_precision(tracker->distance_to_center_get());  // Make text for the distance to center
-  }
-  ez::screen_print(tracker_value + tracker_width, line);  // Print final tracker text
 }
 
 /**
@@ -210,12 +233,6 @@ void ez_screen_task() {
                                "\ny: " + util::to_string_with_precision(chassis.odom_y_get()) +
                                "\na: " + util::to_string_with_precision(chassis.odom_theta_get()),
                            1);  // Don't override the top Page line
-
-          // Display all trackers that are being used
-          screen_print_tracker(chassis.odom_tracker_left, "l", 4);
-          screen_print_tracker(chassis.odom_tracker_right, "r", 5);
-          screen_print_tracker(chassis.odom_tracker_back, "b", 6);
-          screen_print_tracker(chassis.odom_tracker_front, "f", 7);
         }
       }
     }
@@ -242,13 +259,12 @@ void ez_template_extras() {
   // Only run this when not connected to a competition switch
   if (!pros::competition::is_connected()) {
     // PID Tuner
-    // - after you find values that you're happy with, you'll have to set them in auton.cpp
 
-    // Enable / Disable PID Tuner
+    // Enable / Disable PID Tuner                                                                                         PID TUNER
     //  When enabled:
     //  * use A and Y to increment / decrement the constants
-    //  * use the arrow keys to navigate the constants
-    if (master.get_digital_new_press(DIGITAL_X))
+    //  * use the arrow keys to navigate the constants      
+    if (master.get_digital_new_press(DIGITAL_X))                         
       chassis.pid_tuner_toggle();
 
     // Trigger the selected autonomous routine
@@ -283,6 +299,9 @@ void ez_template_extras() {
  * task, not resume it from where it left off.
  */
 void opcontrol() {
+
+  sorterEnabled = false;
+
   // This is preference to what you like to drive on
   chassis.drive_brake_set(MOTOR_BRAKE_HOLD);
 
@@ -292,11 +311,54 @@ void opcontrol() {
 
     chassis.opcontrol_arcade_standard(ez::SPLIT);
 
+  // Controller auton toggle
+    // if(!pros::competition::is_connected()){
+    //   if(master.get_digital_new_press(DIGITAL_UP)){
+    //     currAuton++;
+
+    //     // Wrap around to first item in array
+    //     if(currAuton >= NUM_AUTONS){
+    //       currAuton = 0;
+    //     }
+
+    //     master.rumble(".");
+    //   }
+
+    //   if(master.get_digital_new_press(DIGITAL_DOWN)){
+    //     currAuton--;
+
+    //     if(currAuton < 0){
+    //       currAuton = NUM_AUTONS - 1;
+    //     }
+
+    //     master.rumble(".");
+    //   }
+
+    //   master.set_text(0, 0, "Auton: " + allAutons[currAuton]);
+
+    //   if(master.get_digital_new_press(DIGITAL_X) && master.get_digital_new_press(DIGITAL_B)){
+    //     switch(currAuton){
+    //       case 0:
+    //         turnTest();
+    //         break;
+    //       case 1:
+    //         redSAWP();
+    //         break;
+    //       case 2:
+    //         blueSAWP();
+    //         break;
+    //       case 3:
+    //         skills();
+    //         break;
+    //     }
+    //   }
+    // }
+
     // Set up OP controls for INTAKE                                                         
     if (master.get_digital(DIGITAL_R1)){
         setIntake(127);
     } else if (master.get_digital(DIGITAL_R2)){
-        setIntake(-100);
+        setIntake(-70);
     } else {
         setIntake(0);
     }
@@ -312,15 +374,28 @@ void opcontrol() {
     doinker.button_toggle(master.get_digital(DIGITAL_A));
     pros::delay(10);
 
-    // Set up OP controls for INTAKE LIFTER
-    intakeLifter.button_toggle(master.get_digital(DIGITAL_B));
-    pros::delay(10);
-
     // Set up OP controls for Ladybrown lift task
     if (master.get_digital_new_press(DIGITAL_RIGHT)) {
 			nextState();
       pros::delay(20);
 		}
+
+    // Set up OP control to move intake back a little
+    if (master.get_digital_new_press(DIGITAL_DOWN)) {
+      intakeMovingBackward = true;
+      intakeTargetPosition = intake.get_position() - intakeBackwardDistance;  // Set target position
+    }
+
+        // Move the intake backward until it reaches the target position
+    if (intakeMovingBackward) {
+      setIntake(-80);
+
+            // Check if the intake has reached the target position
+      if (intake.get_position() <= intakeTargetPosition) {
+        intakeMovingBackward = false;  // Stop moving backward
+        setIntake(0);  // Stop the intake
+      }
+    }
 
     pros::delay(ez::util::DELAY_TIME);  // This is used for timer calculations!  Keep this ez::util::DELAY_TIME
   }
