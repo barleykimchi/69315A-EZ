@@ -1,11 +1,12 @@
+// Can use lambda for simple loops w/ simple arrays, like states array
 #include "main.h"
 #include "pros/misc.h"
 #include "pros/rtos.hpp"
 
 // Motor constructors
 pros::Motor intake (-1, pros::v5::MotorGears::blue);  
-pros::Motor ladybrown_Left (18, pros::v5::MotorGears::green);
-pros::Motor ladybrown_Right (19, pros::v5::MotorGears::green);
+pros::Motor ladybrown_Left (-18, pros::v5::MotorGears::green);
+pros::Motor ladybrown_Right (17, pros::v5::MotorGears::green); // 17
 
 // Pneumatic constructors
 ez::Piston intakeLifter('A', false);            // Used EZ Template for toggle function
@@ -15,21 +16,21 @@ ez::Piston doinker('D', false);                 // Used EZ Template for toggle f
 
 // Sensor constructors
 pros::Imu imu(12);
-pros::v5::Optical oSensor(10);
-pros::Rotation rSensor(17);
+pros::v5::Optical oSensor(9);
+pros::Rotation rSensor(12);
 
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 
 // Ladybrown variables
 const int NUM_STATES = 3;
-int states[NUM_STATES] = {250, 2800, 16000};      // Remember: centidegrees
+int states[NUM_STATES] = {150, 3100, 15000};      // Remember: centidegrees
 int currState = 0;
 int target = 0;
 
 // Ladybrown move function
 void setLB(int lbPower){
   ladybrown_Right.move(lbPower);
-  ladybrown_Left.move(-lbPower);
+  ladybrown_Left.move(lbPower);
 }
 
 // Simplify Ladybrown brake state
@@ -52,11 +53,6 @@ void liftControl() {
     double kp = 2;
     setLB(kp * (target - rSensor.get_position())/100.0);
     setLBbrake();
-}
-
-// Intake move function
-void setIntake(int intakePower){                                                   
-  intake.move(intakePower);
 }
 
 // Extend mogo function
@@ -85,11 +81,11 @@ void sortBlueTask(void* param){
       master.set_text(2, 0, "Color Sort: On ");
 
       if(abs(currHue - targetHue) <= HUE_TOLERANCE){
-        setIntake(127);
+        intake.move_voltage(12000);
         pros::delay(60);
-        setIntake(0);
+        intake.move_voltage(0);
         pros::delay(700);
-        setIntake(127);
+        intake.move_voltage(12000);
       }
 
     } else {
@@ -104,13 +100,33 @@ bool intakeMovingBackward = false;
 double intakeTargetPosition = 0;  // Target position in encoder units
 const double intakeBackwardDistance = 30.0;  // Distance to move backward (in encoder units, adjust as needed)
 
+// Anti-Jamming Task
+bool jamEnabled = false;
+
+void antiJamTask(void* param){
+  while(true){
+
+    if(jamEnabled){
+      if(abs(intake.get_actual_velocity()) < 10){
+
+        intake.move_voltage(-12000);
+        pros::delay(500);
+        intake.move_voltage(12000);
+
+      }
+    }
+    pros::delay(20);
+  }
+}
+
 // Chassis constructor
 ez::Drive chassis(
     
-    {-11, -9, 6},
-    {20, 7, -8}, 
+     // Last motor is always flipped
+    {-10, -13, 11}, // flip this side
+    {6, 14, -16},
 
-    12,      // IMU Port
+    20,      // IMU Port
     3.25,  // Wheel Diameter
     450);   // Wheel RPM = cartridge * (motor gear / wheel gear)
 
@@ -155,7 +171,8 @@ void initialize() {
     }
   });
 
-  pros::Task sortBlueTaskHandler(sortBlueTask);
+  pros::Task sortTaskHandler(sortBlueTask);
+  pros::Task antiJamTaskHandler(antiJamTask);
 
 }
 
@@ -301,6 +318,7 @@ void ez_template_extras() {
 void opcontrol() {
 
   sorterEnabled = false;
+  jamEnabled = false;
 
   // This is preference to what you like to drive on
   chassis.drive_brake_set(MOTOR_BRAKE_HOLD);
@@ -313,11 +331,11 @@ void opcontrol() {
 
     // Set up OP controls for INTAKE                                                         
     if (master.get_digital(DIGITAL_R1)){
-        setIntake(127);
+        intake.move(127);
     } else if (master.get_digital(DIGITAL_R2)){
-        setIntake(-70);
+        intake.move(-70);
     } else {
-        setIntake(0);
+        intake.move(0);
     }
 
     // Set up OP controls for MOGO MECH
@@ -345,12 +363,12 @@ void opcontrol() {
 
         // Move the intake backward until it reaches the target position
     if (intakeMovingBackward) {
-      setIntake(-80);
+      intake.move(-80);
 
             // Check if the intake has reached the target position
       if (intake.get_position() <= intakeTargetPosition) {
         intakeMovingBackward = false;  // Stop moving backward
-        setIntake(0);  // Stop the intake
+        intake.move(0);  // Stop the intake
       }
     }
 
