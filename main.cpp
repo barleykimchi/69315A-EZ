@@ -1,29 +1,33 @@
-// Can use lambda for simple loops w/ simple arrays, like states array
 #include "main.h"
 #include "pros/misc.h"
 #include "pros/rtos.hpp"
 
 // Motor constructors
-pros::Motor intake (-1, pros::v5::MotorGears::blue);  
-pros::Motor ladybrown_Left (-18, pros::v5::MotorGears::green);
-pros::Motor ladybrown_Right (17, pros::v5::MotorGears::green); // 17
+pros::Motor intake (-7, pros::v5::MotorGears::blue);  
+pros::Motor ladybrown_Left (19, pros::v5::MotorGears::green);
+pros::Motor ladybrown_Right (-11, pros::v5::MotorGears::green); // 17
 
 // Pneumatic constructors
-ez::Piston intakeLifter('A', false);            // Used EZ Template for toggle function
-pros::adi::Pneumatics mogoL ('B', false);
-pros::adi::Pneumatics mogoR ('C', false);
-ez::Piston doinker('D', false);                 // Used EZ Template for toggle function
+ez::Piston intakeLifter('D', false);            // Used EZ Template for toggle function
+pros::adi::Pneumatics mogoL ('A', false);
+pros::adi::Pneumatics mogoR ('B', false);
+ez::Piston doinkerL('C', false);                 // Used EZ Template for toggle function
 
 // Sensor constructors
-pros::Imu imu(12);
-pros::v5::Optical oSensor(9);
-pros::Rotation rSensor(12);
+pros::Imu imu(4);
+pros::v5::Optical oSensor(12);
+pros::Rotation rSensor(6);
 
+// Controller constructor
 pros::Controller master(pros::E_CONTROLLER_MASTER);
+
+/* 
+      Ladybrown Macro
+ */
 
 // Ladybrown variables
 const int NUM_STATES = 3;
-int states[NUM_STATES] = {150, 3100, 15000};      // Remember: centidegrees
+int states[NUM_STATES] = {150, 14000, 47000};      // Remember: centidegrees
 int currState = 0;
 int target = 0;
 
@@ -50,22 +54,30 @@ void nextState() {
 
 // Set up Ladybrown PID & controls velocity 
 void liftControl() {
-    double kp = 2;
+    double kp = 0.5;
     setLB(kp * (target - rSensor.get_position())/100.0);
     setLBbrake();
 }
 
+/*
+      Mobile Goal Clamp functions
+*/
+
 // Extend mogo function
 void extendMogo(){
-  mogoL.retract();
-  mogoR.extend();
+  mogoL.extend();
+  mogoR.retract();
 }
 
 // Retract mogo function
 void retractMogo(){
-  mogoL.extend();
-  mogoR.retract();
+  mogoL.retract();
+  mogoR.extend();
 }
+
+/*
+      Color Sort Task
+*/
 
 // Color Sort Task Variables
 int targetHue = 220;
@@ -95,6 +107,10 @@ void sortBlueTask(void* param){
   }
 }
 
+/*
+      Anti-Jam Task
+*/
+
 // Move intake back button (Make into jammer)
 bool intakeMovingBackward = false;
 double intakeTargetPosition = 0;  // Target position in encoder units
@@ -123,10 +139,10 @@ void antiJamTask(void* param){
 ez::Drive chassis(
     
      // Last motor is always flipped
-    {-10, -13, 11}, // flip this side
-    {6, 14, -16},
+    {-18, -5, 1}, // flip this side?
+    {3, 9, -8},
 
-    20,      // IMU Port
+    4,      // IMU Port
     3.25,  // Wheel Diameter
     450);   // Wheel RPM = cartridge * (motor gear / wheel gear)
 
@@ -150,6 +166,7 @@ void initialize() {
 
   // Autonomous Selector using LLEMU
   ez::as::auton_selector.autons_add({
+      {"Max\nPositive\n8 points total", maxPos_Red},
       {"Turn Test", turnTest},
       {"Blue Negative SAWP\n8 points total", blueSAWP},
       {"Red Negative SAWP\n8 points total", redSAWP},
@@ -158,6 +175,7 @@ void initialize() {
 
   // Initialize chassis and auton selector
   chassis.initialize();
+  chassis.drive_imu_reset();
   ez::as::initialize();
   master.rumble(chassis.drive_imu_calibrated() ? "." : "---");
 
@@ -346,7 +364,7 @@ void opcontrol() {
     }
 
     // Set up OP controls for DOINKER
-    doinker.button_toggle(master.get_digital(DIGITAL_A));
+    doinkerL.button_toggle(master.get_digital(DIGITAL_A));
     pros::delay(10);
 
     // Set up OP controls for Ladybrown lift task
