@@ -12,6 +12,7 @@ ez::Piston intakeLifter('D', false);            // Used EZ Template for toggle f
 pros::adi::Pneumatics mogoL ('A', false);
 pros::adi::Pneumatics mogoR ('B', false);
 ez::Piston doinkerL('C', false);                 // Used EZ Template for toggle function
+ez::Piston doinkerR('E', false);                 // Used EZ Template for toggle function
 
 // Sensor constructors
 pros::Imu imu(4);
@@ -21,15 +22,14 @@ pros::Rotation rSensor(6);
 // Controller constructor
 pros::Controller master(pros::E_CONTROLLER_MASTER);
 
-/* 
-      Ladybrown Macro
- */
-
+/* L A D Y B R O W N
+*/
 // Ladybrown variables
 const int NUM_STATES = 3;
-int states[NUM_STATES] = {150, 14000, 47000};      // Remember: centidegrees
+int states[NUM_STATES] = {150, 12700, 48000};      // Remember: centidegrees
 int currState = 0;
 int target = 0;
+bool lbTaskEnabled = true;
 
 // Ladybrown move function
 void setLB(int lbPower){
@@ -59,10 +59,8 @@ void liftControl() {
     setLBbrake();
 }
 
-/*
-      Mobile Goal Clamp functions
+/* M O G O C L A M P
 */
-
 // Extend mogo function
 void extendMogo(){
   mogoL.extend();
@@ -75,10 +73,8 @@ void retractMogo(){
   mogoR.extend();
 }
 
-/*
-      Color Sort Task
+/* C O L O R S O R T
 */
-
 // Color Sort Task Variables
 int targetHue = 220;
 const int HUE_TOLERANCE = 10;
@@ -107,10 +103,8 @@ void sortBlueTask(void* param){
   }
 }
 
-/*
-      Anti-Jam Task
+/* A N T I - J A M
 */
-
 // Move intake back button (Make into jammer)
 bool intakeMovingBackward = false;
 double intakeTargetPosition = 0;  // Target position in encoder units
@@ -166,7 +160,9 @@ void initialize() {
 
   // Autonomous Selector using LLEMU
   ez::as::auton_selector.autons_add({
-      {"Max\nPositive\n8 points total", maxPos_Red},
+      {"Max Negative\nBlue", maxNeg_Blue},
+      {"Max Positive\nRed", maxPos_Red},
+      {"Max Positive\nBlue", maxPos_Blue},
       {"Turn Test", turnTest},
       {"Blue Negative SAWP\n8 points total", blueSAWP},
       {"Red Negative SAWP\n8 points total", redSAWP},
@@ -184,7 +180,9 @@ void initialize() {
   // Ladybrown Lift Task
   pros::Task liftControlTask([]{
     while (true) {
-      liftControl();
+      if(lbTaskEnabled){
+        liftControl();
+      }
       pros::delay(10);
     }
   });
@@ -337,6 +335,7 @@ void opcontrol() {
 
   sorterEnabled = false;
   jamEnabled = false;
+  lbTaskEnabled = true;
 
   // This is preference to what you like to drive on
   chassis.drive_brake_set(MOTOR_BRAKE_HOLD);
@@ -367,6 +366,10 @@ void opcontrol() {
     doinkerL.button_toggle(master.get_digital(DIGITAL_A));
     pros::delay(10);
 
+    // Set up OP controls for DOINKER
+    doinkerL.button_toggle(master.get_digital(DIGITAL_A));
+    pros::delay(10);
+
     // Set up OP controls for Ladybrown lift task
     if (master.get_digital_new_press(DIGITAL_RIGHT)) {
 			nextState();
@@ -383,7 +386,7 @@ void opcontrol() {
     if (intakeMovingBackward) {
       intake.move(-80);
 
-            // Check if the intake has reached the target position
+      // Check if the intake has reached the target position
       if (intake.get_position() <= intakeTargetPosition) {
         intakeMovingBackward = false;  // Stop moving backward
         intake.move(0);  // Stop the intake
