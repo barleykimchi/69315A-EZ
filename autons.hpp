@@ -6,14 +6,17 @@ void default_constants();
 extern bool sorterEnabled;
 extern int targetHue;
 
-// Controller auton selector variable declarations
-extern int currAuton;
-extern const int NUM_AUTONS;
-extern string allAutons[]; 
+// Anti-Jam status boolean declaration
+extern bool jamEnabled;
+
+// Ladybrown status boolean declaration
+extern bool lbTaskEnabled;
 
 // Pneumatic declarations
 extern pros::adi::Pneumatics mogoL;
 extern pros::adi::Pneumatics mogoR;
+extern ez::Piston doinkerL;
+extern ez::Piston doinkerR;
 
 // Motor declarations
 extern pros::Motor intake;
@@ -28,7 +31,15 @@ void extendMogo();
 void retractMogo();
 
 // Autonomous programs
+void turnTest();
+
+void skills();
+
 void blueSAWP();
 void redSAWP();
-void skills();
-void turnTest();
+
+void maxPos_Red();
+void maxPos_Blue();
+
+void maxNeg_Red();
+void maxNeg_Blue();
