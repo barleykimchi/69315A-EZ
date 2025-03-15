@@ -1,398 +1,327 @@
 #include "main.h"
+#include "lemlib/api.hpp" // IWYU pragma: keep
+#include "lemlib/chassis/trackingWheel.hpp"
+#include "pros/adi.hpp"
 #include "pros/misc.h"
-#include "pros/rtos.hpp"
+#include "pros/misc.hpp"
+#include "autons.hpp"
+#include "pros/motors.h"
+
+pros::MotorGroup leftMotors{{-4, 2, -3}, pros::MotorGearset::blue};
+pros::MotorGroup rightMotors{{12, -11, 13}, pros::MotorGearset::blue};
 
 // Motor constructors
-pros::Motor intake (-7, pros::v5::MotorGears::blue);  
-pros::Motor ladybrown_Left (19, pros::v5::MotorGears::green);
-pros::Motor ladybrown_Right (-11, pros::v5::MotorGears::green); // 17
+pros::Motor intake(-7, pros::MotorGearset::blue);
+pros::MotorGroup lb({-9, 8}, pros::MotorGearset::green);
 
 // Pneumatic constructors
-ez::Piston intakeLifter('D', false);            // Used EZ Template for toggle function
-pros::adi::Pneumatics mogoL ('A', false);
-pros::adi::Pneumatics mogoR ('B', false);
-ez::Piston doinkerL('C', false);                 // Used EZ Template for toggle function
-ez::Piston doinkerR('E', false);                 // Used EZ Template for toggle function
+pros::adi::Pneumatics mogoL('A', true);
+pros::adi::Pneumatics mogoR('B', true);
+pros::adi::Pneumatics doinkerL('C', false);
+pros::adi::Pneumatics doinkerR('D', false);
+// pros::adi::Pneumatics hang('E', false);
 
 // Sensor constructors
-pros::Imu imu(4);
-pros::v5::Optical oSensor(12);
-pros::Rotation rSensor(6);
+pros::Imu imu(1);
+pros::Rotation rSensor(19);
+pros::Optical oSensor(14);
 
-// Controller constructor
-pros::Controller master(pros::E_CONTROLLER_MASTER);
+// controller constructor
+pros::Controller controller(pros::E_CONTROLLER_MASTER);
 
-/* L A D Y B R O W N
-*/
+// Extend mogo function
+void extendMogo(){
+    mogoL.extend();
+    mogoR.extend();
+}
+  
+// Retract mogo function
+void retractMogo(){
+    mogoL.retract();
+    mogoR.retract();
+}
+
+// ----------- L A D Y B R O W N ----------- //
+// Ladybrown states arrays
+int autonStates[4] = {150, 12000, 25000, 50000};      // Remember: centidegrees; 150, 12000, 50000
+int driverStates[3] = {150, 12000, 50000};
+
 // Ladybrown variables
-const int NUM_STATES = 3;
-int states[NUM_STATES] = {150, 12700, 48000};      // Remember: centidegrees
 int currState = 0;
-int target = 0;
+int target = driverStates[currState];  // Default to driver states
+
+// Ladybrown flags
+bool isAutonMode = false;
 bool lbTaskEnabled = true;
 
-// Ladybrown move function
-void setLB(int lbPower){
-  ladybrown_Right.move(lbPower);
-  ladybrown_Left.move(lbPower);
-}
-
-// Simplify Ladybrown brake state
-void setLBbrake(){
-  ladybrown_Left.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-  ladybrown_Right.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
-}
-
-// Cycles through states array when called
+// Depending on flag, cycles through states
 void nextState() {
-    currState += 1;
-    if (currState == NUM_STATES) {
-        currState = 0;
-    }
-    target = states[currState];
+    int numStates = isAutonMode ? 4 : 3;
+    currState = (currState + 1) % numStates;
+    target = isAutonMode ? autonStates[currState] : driverStates[currState];
 }
 
 // Set up Ladybrown PID & controls velocity 
 void liftControl() {
-    double kp = 0.5;
-    setLB(kp * (target - rSensor.get_position())/100.0);
-    setLBbrake();
+    double kp = 0.7;
+    lb.move(kp * (target - rSensor.get_position())/100.0);
+    lb.set_brake_mode((pros::E_MOTOR_BRAKE_HOLD));
 }
 
-/* M O G O C L A M P
-*/
-// Extend mogo function
-void extendMogo(){
-  mogoL.extend();
-  mogoR.retract();
-}
-
-// Retract mogo function
-void retractMogo(){
-  mogoL.retract();
-  mogoR.extend();
-}
-
-/* C O L O R S O R T
-*/
+// ----------- C O L O R S O R T -----------//
 // Color Sort Task Variables
 int targetHue = 220;
 const int HUE_TOLERANCE = 10;
 bool sorterEnabled = false;
 
-// Color Sort Task Function
-void sortBlueTask(void* param){
-  while(true){
-    if(sorterEnabled){
-      oSensor.set_led_pwm(100);
-      int currHue = oSensor.get_hue();
-      master.set_text(2, 0, "Color Sort: On ");
-
-      if(abs(currHue - targetHue) <= HUE_TOLERANCE){
-        intake.move_voltage(12000);
-        pros::delay(60);
-        intake.move_voltage(0);
-        pros::delay(700);
-        intake.move_voltage(12000);
-      }
-
-    } else {
-      master.set_text(2, 0, "Color Sort: Off");
-    }
-    pros::delay(20);
-  }
-}
-
-/* A N T I - J A M
-*/
-// Move intake back button (Make into jammer)
-bool intakeMovingBackward = false;
-double intakeTargetPosition = 0;  // Target position in encoder units
-const double intakeBackwardDistance = 30.0;  // Distance to move backward (in encoder units, adjust as needed)
-
-// Anti-Jamming Task
-bool jamEnabled = false;
-
-void antiJamTask(void* param){
-  while(true){
-
-    if(jamEnabled){
-      if(abs(intake.get_actual_velocity()) < 10){
-
-        intake.move_voltage(-12000);
-        pros::delay(500);
-        intake.move_voltage(12000);
-
-      }
-    }
-    pros::delay(20);
-  }
-}
-
-// Chassis constructor
-ez::Drive chassis(
+void colorSortTask(void* param) {
+    while(true){
+        if(sorterEnabled){
+          oSensor.set_led_pwm(100);
+          int currHue = oSensor.get_hue();
+          controller.set_text(2, 0, "Color Sort: On ");
     
-     // Last motor is always flipped
-    {-18, -5, 1}, // flip this side?
-    {3, 9, -8},
-
-    4,      // IMU Port
-    3.25,  // Wheel Diameter
-    450);   // Wheel RPM = cartridge * (motor gear / wheel gear)
-
-/**
- * Runs initialization code. This occurs as soon as the program is started.
- *
- * All other competition modes are blocked by initialize; it is recommended
- * to keep execution time for this mode under a few seconds.
- */
-void initialize() {
-
-  pros::delay(500);  // Stop the user from doing anything while legacy ports configure
-
-  // Configure your chassis controls
-  chassis.opcontrol_curve_buttons_toggle(true);   // Enables modifying the controller curve with buttons on the joysticks
-  chassis.opcontrol_drive_activebrake_set(0.0);   // Sets the active brake kP. We recommend ~2.  0 will disable.
-  chassis.opcontrol_curve_default_set(0.0, 0.0);  // Defaults for curve.
-
-  // Set default constants from autons.cpp
-  default_constants();
-
-  // Autonomous Selector using LLEMU
-  ez::as::auton_selector.autons_add({
-      {"Max Negative\nBlue", maxNeg_Blue},
-      {"Max Positive\nRed", maxPos_Red},
-      {"Max Positive\nBlue", maxPos_Blue},
-      {"Turn Test", turnTest},
-      {"Blue Negative SAWP\n8 points total", blueSAWP},
-      {"Red Negative SAWP\n8 points total", redSAWP},
-      {"Skills", skills},
-  });
-
-  // Initialize chassis and auton selector
-  chassis.initialize();
-  chassis.drive_imu_reset();
-  ez::as::initialize();
-  master.rumble(chassis.drive_imu_calibrated() ? "." : "---");
-
-  extendMogo();
-
-  // Ladybrown Lift Task
-  pros::Task liftControlTask([]{
-    while (true) {
-      if(lbTaskEnabled){
-        liftControl();
-      }
-      pros::delay(10);
-    }
-  });
-
-  pros::Task sortTaskHandler(sortBlueTask);
-  pros::Task antiJamTaskHandler(antiJamTask);
-
-}
-
-/**
- * Runs while the robot is in the disabled state of Field Management System or
- * the VEX Competition Switch, following either autonomous or opcontrol. When
- * the robot is enabled, this task will exit.
- */
-void disabled() {
-  // . . .
-}
-
-/**
- * Runs after initialize(), and before autonomous when connected to the Field
- * Management System or the VEX Competition Switch. This is intended for
- * competition-specific initialization routines, such as an autonomous selector
- * on the LCD.
- *
- * This task will exit when the robot is enabled and autonomous or opcontrol
- * starts.
- */
-void competition_initialize() {
-  // . . .
-}
-
-/**
- * Runs the user autonomous code. This function will be started in its own task
- * with the default priority and stack size whenever the robot is enabled via
- * the Field Management System or the VEX Competition Switch in the autonomous
- * mode. Alternatively, this function may be called in initialize or opcontrol
- * for non-competition testing purposes.
- *
- * If the robot is disabled or communications is lost, the autonomous task
- * will be stopped. Re-enabling the robot will restart the task, not re-start it
- * from where it left off.
- */
-void autonomous() {
-  chassis.pid_targets_reset();                // Resets PID targets to 0
-  chassis.drive_imu_reset();                  // Reset gyro position to 0
-  chassis.drive_sensor_reset();               // Reset drive sensors to 0
-  chassis.odom_xyt_set(0_in, 0_in, 0_deg);    // Set the current position, you can start at a specific position with this
-  chassis.drive_brake_set(MOTOR_BRAKE_HOLD);  // Set motors to hold.  This helps autonomous consistency
-
-  /*
-  Odometry and Pure Pursuit are not magic
-
-  It is possible to get perfectly consistent results without tracking wheels,
-  but it is also possible to have extremely inconsistent results without tracking wheels.
-  When you don't use tracking wheels, you need to:
-   - avoid wheel slip
-   - avoid wheelies
-   - avoid throwing momentum around (super harsh turns, like in the example below)
-  You can do cool curved motions, but you have to give your robot the best chance
-  to be consistent
-  */
-
-  ez::as::auton_selector.selected_auton_call();  // Calls selected auton from autonomous selector
-}
-
-/**
- * Ez screen task
- * Adding new pages here will let you view them during user control or autonomous
- * and will help you debug problems you're having
- */
-void ez_screen_task() {
-  while (true) {
-    // Only run this when not connected to a competition switch
-    if (!pros::competition::is_connected()) {
-      // Blank page for odom debugging
-      if (chassis.odom_enabled() && !chassis.pid_tuner_enabled()) {
-        // If we're on the first blank page...
-        if (ez::as::page_blank_is_on(0)) {
-          // Display X, Y, and Theta
-          ez::screen_print("x: " + util::to_string_with_precision(chassis.odom_x_get()) +
-                               "\ny: " + util::to_string_with_precision(chassis.odom_y_get()) +
-                               "\na: " + util::to_string_with_precision(chassis.odom_theta_get()),
-                           1);  // Don't override the top Page line
+          if(abs(currHue - targetHue) <= HUE_TOLERANCE){
+            intake.move_voltage(12000);
+            pros::delay(75);
+            intake.move_voltage(0);
+            pros::delay(600);
+            intake.move_voltage(12000);
+          }
+    
+        } else {
+          controller.set_text(2, 0, "Color Sort: Off");
         }
+        pros::delay(20);
       }
-    }
-
-    // Remove all blank pages when connected to a comp switch
-    else {
-      if (ez::as::page_blank_amount() > 0)
-        ez::as::page_blank_remove_all();
-    }
-
-    pros::delay(ez::util::DELAY_TIME);
-  }
-}
-pros::Task ezScreenTask(ez_screen_task);
-
-/**
- * Gives you some extras to run in your opcontrol:
- * - run your autonomous routine in opcontrol by pressing DOWN and B
- *   - to prevent this from accidentally happening at a competition, this
- *     is only enabled when you're not connected to competition control.
- * - gives you a GUI to change your PID values live by pressing X
- */
-void ez_template_extras() {
-  // Only run this when not connected to a competition switch
-  if (!pros::competition::is_connected()) {
-    // PID Tuner
-
-    // Enable / Disable PID Tuner                                                                                         PID TUNER
-    //  When enabled:
-    //  * use A and Y to increment / decrement the constants
-    //  * use the arrow keys to navigate the constants      
-    if (master.get_digital_new_press(DIGITAL_X))                         
-      chassis.pid_tuner_toggle();
-
-    // Trigger the selected autonomous routine
-    if (master.get_digital(DIGITAL_B) && master.get_digital(DIGITAL_X)) {
-      pros::motor_brake_mode_e_t preference = chassis.drive_brake_get();
-      autonomous();
-      chassis.drive_brake_set(preference);
-    }
-
-    // Allow PID Tuner to iterate
-    chassis.pid_tuner_iterate();
-  }
-
-  // Disable PID Tuner when connected to a comp switch
-  else {
-    if (chassis.pid_tuner_enabled())
-      chassis.pid_tuner_disable();
-  }
 }
 
-/**
- * Runs the operator control code. This function will be started in its own task
- * with the default priority and stack size whenever the robot is enabled via
- * the Field Management System or the VEX Competition Switch in the operator
- * control mode.
- *
- * If no competition control is connected, this function will run immediately
- * following initialize().
- *
- * If the robot is disabled or communications is lost, the
- * operator control task will be stopped. Re-enabling the robot will restart the
- * task, not resume it from where it left off.
- */
+// // Color Sort Task Function
+// void colorSortTask(void* param){
+//   while(true){
+//     if(sorterEnabled){
+//       oSensor.set_led_pwm(100);
+//       int currHue = oSensor.get_hue();
+//       controller.set_text(2, 0, "Color Sort: On ");
+
+//       if(abs(currHue - targetHue) <= HUE_TOLERANCE){
+    
+//         // intake.move(0);
+//         intake.move_relative(800, 127);
+
+//         // Wait until the movement is complete
+//         while (intake.get_actual_velocity() > 5) {
+//             pros::delay(100);
+//         }
+
+//         // Stop the intake
+//         intake.move(0);
+//         pros::delay(500);
+
+//         intake.move_voltage(12000);
+//       }
+
+//     } else {
+//       controller.set_text(2, 0, "Color Sort: Off");
+//     }
+//     pros::delay(20);
+//   }
+// }
+
+// tracking wheels
+pros::Rotation horizontalEnc(5);
+pros::Rotation verticalEnc(6);
+lemlib::TrackingWheel horizontal(&horizontalEnc, lemlib::Omniwheel::NEW_275, -3.75); 
+lemlib::TrackingWheel vertical(&verticalEnc, lemlib::Omniwheel::NEW_275, 0.125); //0.125
+
+// drivetrain settings
+lemlib::Drivetrain drivetrain(&leftMotors, // left motor group
+                              &rightMotors, // right motor group
+                              10.75, // 10 inch track width
+                              lemlib::Omniwheel::NEW_325, // using new 4" omnis
+                              450, // drivetrain rpm is 360
+                              2 // horizontal drift is 2. If we had traction wheels, it would have been 8
+);
+
+// lateral PID controller
+lemlib::ControllerSettings lateral_controller(10, // proportional gain (kP)
+                                              0, // integral gain (kI)
+                                              55, // derivative gain (kD)
+                                              0, // anti windup
+                                              1, // small error range, in inches
+                                              100, // small error range timeout, in milliseconds
+                                              3, // large error range, in inches
+                                              300, // large error range timeout, in milliseconds
+                                              0 // maximum acceleration (slew)
+);
+
+// angular PID controller
+lemlib::ControllerSettings angular_controller(2, // proportional gain (kP)
+                                              0, // integral gain (kI)
+                                              13, // derivative gain (kD)
+                                              0, // anti windup
+                                              0, // small error range, in inches
+                                              0, // small error range timeout, in milliseconds
+                                              0, // large error range, in inches
+                                              0, // large error range timeout, in milliseconds
+                                              0 // maximum acceleration (slew)
+);
+
+// sensors for odometry
+lemlib::OdomSensors sensors(&vertical, // vertical tracking wheel
+                            nullptr, // vertical tracking wheel 2, set to nullptr as we don't have a second one
+                            &horizontal, // horizontal tracking wheel
+                            nullptr, // horizontal tracking wheel 2, set to nullptr as we don't have a second one
+                            &imu // inertial sensor
+);
+
+// input curve for throttle input during driver control
+lemlib::ExpoDriveCurve throttleCurve(3, // joystick deadband out of 127
+                                     13, // minimum output where drivetrain will move out of 127
+                                     1.019 // expo curve gain
+);
+
+// input curve for steer input during driver control
+lemlib::ExpoDriveCurve steerCurve(3, // joystick deadband out of 127
+                                  11, // minimum output where drivetrain will move out of 127
+                                  1.019 // expo curve gain
+);
+
+// create the chassis
+lemlib::Chassis chassis(drivetrain, lateral_controller, angular_controller, sensors, &throttleCurve, &steerCurve);
+
+void initialize() {
+    pros::lcd::initialize(); // initialize brain screen
+    chassis.calibrate(); // calibrate sensors
+	chassis.setBrakeMode(pros::E_MOTOR_BRAKE_HOLD);
+    intake.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+    lb.set_brake_mode(pros::E_MOTOR_BRAKE_HOLD);
+
+    // thread to for brain screen and position logging
+    pros::Task screenTask([&]() {
+        while (true) {
+            // print robot location to the brain screen
+            pros::lcd::print(0, "X: %f", chassis.getPose().x); // x
+            pros::lcd::print(1, "Y: %f", chassis.getPose().y); // y
+            pros::lcd::print(2, "Theta: %f", chassis.getPose().theta); // heading
+            // log position telemetry
+            lemlib::telemetrySink()->info("Chassis pose: {}", chassis.getPose());
+            // delay to save resources
+            pros::delay(50);
+        }
+    });
+
+	// Ladybrown Lift Task
+    pros::Task liftControlTask([]{
+        while (true) {
+            if(lbTaskEnabled){
+                liftControl();
+            }
+            pros::delay(10);
+        }
+    });
+
+    // Color Sort Task
+    pros::Task colorSortTaskHandler(colorSortTask);
+    
+}
+
+void disabled() {
+
+}
+void competition_initialize() {}
+
+// 1: Skills
+
+// 2: Red Positive Ring Rush
+// 3: Blue Positive Ring Rush
+
+// 4: Red Negative Half SAWP
+// 5: Blue Negative Half SAWP
+
+void autonomous() {
+
+    isAutonMode = true;
+    sorterEnabled = true;
+    // hang.extend();
+
+    skills();
+}
+
 void opcontrol() {
 
-  sorterEnabled = false;
-  jamEnabled = false;
-  lbTaskEnabled = true;
+    bool rDoinkerToggle = false;
+    bool lDoinkerToggle = false;
 
-  // This is preference to what you like to drive on
-  chassis.drive_brake_set(MOTOR_BRAKE_HOLD);
+    while (true) {
+        // get joystick positions
+        int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
+        int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
+        // move the chassis with curvature drive
+        chassis.arcade(leftY, rightX);
 
-  while (true) {
-    // Gives you some extras to make EZ-Template ezier
-    ez_template_extras();
+        isAutonMode = false;
+        sorterEnabled = false;
+        // hang.retract();
 
-    chassis.opcontrol_arcade_standard(ez::SPLIT);
+		// Intake controls
+        if (controller.get_digital(DIGITAL_R1)){
+            intake.move_velocity(12000);         
+        } else if (controller.get_digital(DIGITAL_R2)){
+            intake.move_velocity(-12000); 
+        } else {
+            intake.move_velocity(0); 
+        }
 
-    // Set up OP controls for INTAKE                                                         
-    if (master.get_digital(DIGITAL_R1)){
-        intake.move(127);
-    } else if (master.get_digital(DIGITAL_R2)){
-        intake.move(-70);
-    } else {
-        intake.move(0);
+        // LB lift task control
+        if (controller.get_digital_new_press(DIGITAL_RIGHT)) {
+            lbTaskEnabled = true;
+            nextState();
+            pros::delay(20);
+        } else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_UP)){
+            lbTaskEnabled = false;
+            lb.move(127);
+        } else if (controller.get_digital(pros::E_CONTROLLER_DIGITAL_DOWN)){
+            lbTaskEnabled = false;
+            lb.move(-40);
+        } else {
+            lb.move(0);
+        }   
+
+        // Mogo mech control
+        if (controller.get_digital(DIGITAL_L1)){
+            extendMogo();
+        } else if (controller.get_digital(DIGITAL_L2)){
+            retractMogo();
+        }
+
+        // Right doinker control
+        if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A)){
+            if(rDoinkerToggle == false){
+                doinkerR.extend();
+                rDoinkerToggle = true;
+            } else {
+                doinkerR.retract();
+                rDoinkerToggle = false;
+            }
+        }
+
+        // Left doinker control
+        if(controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_Y)){
+            if(lDoinkerToggle == false){
+                doinkerL.extend();
+                lDoinkerToggle = true;
+            } else {
+                doinkerL.retract();
+                lDoinkerToggle = false;
+            }
+        }
+
+
+
+        controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_A);
+
+        // delay to save resources
+        pros::delay(10);
     }
-
-    // Set up OP controls for MOGO MECH
-    if (master.get_digital(DIGITAL_L1)){
-      extendMogo();
-    } else if (master.get_digital(DIGITAL_L2)){
-      retractMogo();
-    }
-
-    // Set up OP controls for DOINKER
-    doinkerL.button_toggle(master.get_digital(DIGITAL_A));
-    pros::delay(10);
-
-    // Set up OP controls for DOINKER
-    doinkerL.button_toggle(master.get_digital(DIGITAL_A));
-    pros::delay(10);
-
-    // Set up OP controls for Ladybrown lift task
-    if (master.get_digital_new_press(DIGITAL_RIGHT)) {
-			nextState();
-      pros::delay(20);
-		}
-
-    // Set up OP control to move intake back a little
-    if (master.get_digital_new_press(DIGITAL_DOWN)) {
-      intakeMovingBackward = true;
-      intakeTargetPosition = intake.get_position() - intakeBackwardDistance;  // Set target position
-    }
-
-        // Move the intake backward until it reaches the target position
-    if (intakeMovingBackward) {
-      intake.move(-80);
-
-      // Check if the intake has reached the target position
-      if (intake.get_position() <= intakeTargetPosition) {
-        intakeMovingBackward = false;  // Stop moving backward
-        intake.move(0);  // Stop the intake
-      }
-    }
-
-    pros::delay(ez::util::DELAY_TIME);  // This is used for timer calculations!  Keep this ez::util::DELAY_TIME
-  }
 }
