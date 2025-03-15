@@ -1,753 +1,618 @@
-#include "main.h"
+#include "autons.hpp"
+#include "lemlib/chassis/chassis.hpp"
+#include "pros/motors.hpp"
+#include "pros/rtos.hpp"
 
-// Speeds (Out of 127)
-int DRIVE_SPEED = 110;
-const int TURN_SPEED = 90;
-const int SWING_SPEED = 110;
+// ANGULAR MOTIONS
+// turnToHeading --> turn to certain angle
+// turntoPoint --> like turnToHeading but uses coordinates instead 
+    // turn >10" of chassis only!!!
+// swingToHeading --> turn only using half drivetrain
+// swingToPoint --> swingToHeading but coordinates
 
+// LATERAL MOTIONS
+// moveToPoint --> move to point w/o specifying degree
+// moveToPose --> majority lateral motion, ending with swing to certain heading
+    // SLOWER than moveToPoint
+
+
+    
 // Color Sensor Values
 const int red = 15;
 const int blue = 210;
 
-// Constants
-void default_constants() {
-  // P, I, D, and Start I
-  chassis.pid_drive_constants_set(20.00, 0.0, 100.0);         // Fwd/rev constants
-  chassis.pid_heading_constants_set(11.0, 0.0, 20.0);        // Holds the robot straight while going forward
-  chassis.pid_turn_constants_set(3.0, 0.05, 20.0, 15.0);     // Turn in place constants
-  chassis.pid_swing_constants_set(6.0, 0.0, 65.0);           // Swing constants
+void turnTest() {
 
-  // Exit conditions
-  chassis.pid_turn_exit_condition_set(90_ms, 3_deg, 250_ms, 7_deg, 500_ms, 500_ms);
-  chassis.pid_swing_exit_condition_set(90_ms, 3_deg, 250_ms, 7_deg, 500_ms, 500_ms);
-  chassis.pid_drive_exit_condition_set(90_ms, 1_in, 250_ms, 3_in, 500_ms, 500_ms);
+    // Spit out blue
+    targetHue = blue;
 
-  chassis.pid_turn_chain_constant_set(3_deg);
-  chassis.pid_swing_chain_constant_set(5_deg);
-  chassis.pid_drive_chain_constant_set(3_in);
-
-  // Slew constants
-  chassis.slew_turn_constants_set(3_deg, 70);
-  chassis.slew_drive_constants_set(3_in, 70);
-  chassis.slew_swing_constants_set(3_in, 80);
-
-  chassis.pid_angle_behavior_set(ez::shortest);  // Changes the default behavior to the shortest path 
-}
-
-void turnTest(){
-
-  chassis.pid_swing_set(ez::RIGHT_SWING, -290_deg, 50, 5);
-  chassis.pid_wait_quick_chain();
-  chassis.pid_swing_set(ez::RIGHT_SWING, -330_deg, 50, 5);
-  chassis.pid_wait();
-}
-
-void blueSAWP(){ // Blue SAWP
-  
-  sorterEnabled = true;
-  targetHue = red;
-  jamEnabled = true;
-
-  // Drive and turn to alliance stake
-  chassis.pid_drive_set(-7_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  chassis.pid_turn_set(-90_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  chassis.pid_drive_set(-7_in, DRIVE_SPEED);
-  chassis.pid_wait();
-
-  // Score preload
-  intake.move_voltage(12000);
-  pros::delay(500);
-  intake.move_voltage(0);
-
-  // Back up
-  chassis.pid_drive_set(2_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Turn to mogo
-  chassis.pid_turn_set(130_deg, TURN_SPEED);
-  chassis.pid_wait();
-
-  // Drive to and hold mogo
-  extendMogo();
-  chassis.pid_drive_set(-35_in, 100);
-  chassis.pid_wait_until(-20_in);
-  chassis.pid_speed_max_set(50);
-  chassis.pid_wait_quick_chain();
-  retractMogo();
-  pros::delay(500);
-
-  // Turn to 1-stack
-  chassis.pid_turn_set(0_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Drive to and collect first ring
-  intake.move_voltage(12000);
-  chassis.pid_drive_set(17_in, 40);
-  chassis.pid_wait();
-  
-  // Turn to 4-stack
-  chassis.pid_turn_set(-95_deg, TURN_SPEED);
-  chassis.pid_wait_until(-90_deg);
-
-  // Drive to and collect second ring
-  chassis.pid_drive_set(12_in, 40);
-  chassis.pid_wait();
-  pros::delay(300);
-
-  // Back up
-  chassis.pid_drive_set(-5_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Turn to third ring
-  chassis.pid_turn_set(-65_deg, TURN_SPEED);
-  chassis.pid_wait_until(-60_deg);
-
-  // Drive to and collect third ring
-  chassis.pid_drive_set(14_in, 40);
-  chassis.pid_wait();
-  pros::delay(500);
-
-  // Back up
-  chassis.pid_drive_set(-10_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Turn towards ladder
-  chassis.pid_turn_set(-182_deg, TURN_SPEED);
-  chassis.pid_wait_until(-180_deg);
-  intake.move_voltage(0);
-
-  // Drive to and touch ladder
-  chassis.pid_drive_set(34_in, DRIVE_SPEED);
-  chassis.pid_wait_until(20_in);
-  chassis.pid_speed_max_set(30);
-  chassis.pid_wait();
-
-  ladybrown_Left.move_absolute(100, 127);
-  ladybrown_Right.move_absolute(100, 127);
-
-  pros::delay(500);
-
-  sorterEnabled = false;
-  jamEnabled = false;
-}
-
-void redSAWP(){ // Red SAWP
-
-  sorterEnabled = true;
-  targetHue = blue;
-  jamEnabled = true;
-  lbTaskEnabled = false;
-
-  // Drive and turn to alliance stake
-  chassis.pid_drive_set(-7_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  chassis.pid_turn_set(90_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  chassis.pid_drive_set(-7_in, DRIVE_SPEED);
-  chassis.pid_wait();
-
-  // Score preload
-  intake.move_voltage(12000);
-  pros::delay(500);
-  intake.move_voltage(0);
-
-  // Back up
-  chassis.pid_drive_set(2_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Turn to mogo
-  chassis.pid_turn_set(-130_deg, TURN_SPEED);
-  chassis.pid_wait();
-
-  // Drive to and hold mogo
-  extendMogo();
-  chassis.pid_drive_set(-35_in, 100);
-  chassis.pid_wait_until(-20_in);
-  chassis.pid_speed_max_set(50);
-  chassis.pid_wait_quick_chain();
-  retractMogo();
-  pros::delay(500);
-
-  // Turn to 1-stack
-  chassis.pid_turn_set(0_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Drive to and collect first ring
-  intake.move_voltage(12000);
-  chassis.pid_drive_set(17_in, 40);
-  chassis.pid_wait();
-  
-  // Turn to 4-stack
-  chassis.pid_turn_set(95_deg, TURN_SPEED);
-  chassis.pid_wait_until(90_deg);
-
-  // Drive to and collect second ring
-  chassis.pid_drive_set(12_in, 40);
-  chassis.pid_wait();
-  pros::delay(300);
-
-  // Back up
-  chassis.pid_drive_set(-5_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Turn to third ring
-  chassis.pid_turn_set(65_deg, TURN_SPEED);
-  chassis.pid_wait_until(60_deg);
-
-  // Drive to and collect third ring
-  chassis.pid_drive_set(13_in, 40);
-  chassis.pid_wait();
-  pros::delay(500);
-
-  // Back up
-  chassis.pid_drive_set(-10_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Turn towards ladder
-  chassis.pid_turn_set(162_deg, TURN_SPEED);
-  chassis.pid_wait_until(160_deg);
-  intake.move_voltage(0);
-
-  // Drive to and touch ladder
-  chassis.pid_drive_set(34_in, DRIVE_SPEED);
-  chassis.pid_wait_until(20_in);
-  chassis.pid_speed_max_set(30);
-  chassis.pid_wait();
-
-  ladybrown_Left.move_absolute(100, 127);
-  ladybrown_Right.move_absolute(100, 127);
-
-  pros::delay(500);
-
-  sorterEnabled = false;
-  jamEnabled = false;
+    intake.move_velocity(12000);
+    
 }
 
 void skills(){
 
-  DRIVE_SPEED = 80;
-
-  // Score preload
-  intake.move_voltage(12000);
-  pros::delay(500);
-  intake.move_voltage(0);
-
-  // Drive to position for mogo
-  chassis.pid_drive_set(7_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  chassis.pid_turn_set(-90_deg, TURN_SPEED);
-  chassis.pid_wait();
-
-  // Drive to and hold mogo
-  extendMogo();
-  chassis.pid_drive_set(-25_in, 60);
-  chassis.pid_wait_until(-15_in);
-  retractMogo();
-  pros::delay(500);
-
-  // Turn to 1st ring
-  chassis.pid_turn_set(-10_deg, TURN_SPEED);
-  chassis.pid_wait();
-
-  // Drive to and collect 1st ring
-  intake.move_voltage(12000);
-  chassis.pid_drive_set(20_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Turn to 2nd ring
-  chassis.pid_turn_set(90_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Drive to and collect 2nd ring
-  chassis.pid_drive_set(34_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Turn to 3rd ring
-  chassis.pid_turn_set(0_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Drive to and collect 3rd ring
-  chassis.pid_drive_set(25_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Turn to 4th ring
-  chassis.pid_turn_set(180_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-  
-  // Drive to and collect 4th ring
-  chassis.pid_drive_set(50_in, DRIVE_SPEED);
-  chassis.pid_wait();
-
-  // Back up
-  chassis.pid_drive_set(-15_in, DRIVE_SPEED);
-  chassis.pid_wait();
-
-  // Turn to 5th & 6th rings
-  chassis.pid_turn_set(-90_deg, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  chassis.pid_drive_set(5_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  chassis.pid_turn_set(-180_deg, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Drive to and collect 5th and 6th rings
-  chassis.pid_drive_set(30_in, DRIVE_SPEED);
-  chassis.pid_wait();
-
-  // Score 5th & 6th rings
-  pros::delay(1500);
-
-  // Turn to corner
-  chassis.pid_turn_set(295_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Drive to corner and deposit mogo
-  chassis.pid_drive_set(-12_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-  extendMogo();
-
-  // Drive towards center
-  chassis.pid_drive_set(25_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Turn towards 2nd mogo
-  chassis.pid_turn_set(-270_deg, TURN_SPEED);
-  chassis.pid_wait();
-
-  // Other side of field:
-  // Drive to and hold 2nd mogo
-  chassis.pid_drive_set(-55_in, 60);
-  chassis.pid_wait_until(-50_in);
-  retractMogo();
-  pros::delay(500);
-
-  // Back up
-  chassis.pid_drive_set(1_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Turn to 1st ring
-  chassis.pid_turn_set(0_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Drive to and collect 1st ring
-  chassis.pid_drive_set(20_in, DRIVE_SPEED);
-  chassis.pid_wait();
-  pros::delay(500);
-
-   // Turn to 2nd ring
-  chassis.pid_turn_set(-90_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Drive to and collect 2nd ring
-  chassis.pid_drive_set(36_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Turn to 3rd ring
-  chassis.pid_turn_set(-360_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Drive to and collect 3rd ring
-  chassis.pid_drive_set(25_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Turn to 4th ring
-  chassis.pid_turn_set(180_deg, TURN_SPEED, ez::counterclockwise);
-  chassis.pid_wait_quick_chain();
-  
-  // Drive to and collect 4th ring
-  chassis.pid_drive_set(50_in, DRIVE_SPEED);
-  chassis.pid_wait();
-
-  // Back up
-  chassis.pid_drive_set(-15_in, DRIVE_SPEED);
-  chassis.pid_wait();
-
-  // Turn to 5th and 6th rings
-  chassis.pid_turn_set(90_deg, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  chassis.pid_drive_set(5_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  chassis.pid_turn_set(180_deg, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Drive to and collect 5th and 6th rings
-  chassis.pid_drive_set(25_in, DRIVE_SPEED);
-  chassis.pid_wait();
-
-  // Wait for rings to score
-  pros::delay(1500);
-
-  // Turn to corner
-  chassis.pid_turn_set(60_deg, TURN_SPEED);                 // TEST TEST TEST!
-  chassis.pid_wait_quick_chain();                             // DOWNLOAD DOWNLOAD DOWNLOAD!
-
-  // Deposit mogo in corner
-  chassis.pid_drive_set(-14_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-  extendMogo();
-
-  pros::delay(500);
-
-  chassis.pid_drive_set(10_in, DRIVE_SPEED);
-  chassis.pid_wait();
-}
-
-///
-// Wait Until and Changing Max Speed
-///
-void wait_until_change_speed() {
-  // pid_wait_until will wait until the robot gets to a desired position
-
-  // When the robot gets to 6 inches slowly, the robot will travel the remaining distance at full speed
-  chassis.pid_drive_set(24_in, 30, true);
-  chassis.pid_wait_until(6_in);
-  chassis.pid_speed_max_set(DRIVE_SPEED);  // After driving 6 inches at 30 speed, the robot will go the remaining distance at DRIVE_SPEED
-  chassis.pid_wait();
-
-  chassis.pid_turn_set(45_deg, TURN_SPEED);
-  chassis.pid_wait();
-
-  chassis.pid_turn_set(-45_deg, TURN_SPEED);
-  chassis.pid_wait();
-
-  chassis.pid_turn_set(0_deg, TURN_SPEED);
-  chassis.pid_wait();
-
-  // When the robot gets to -6 inches slowly, the robot will travel the remaining distance at full speed
-  chassis.pid_drive_set(-24_in, 30, true);
-  chassis.pid_wait_until(-6_in);
-  chassis.pid_speed_max_set(DRIVE_SPEED);  // After driving 6 inches at 30 speed, the robot will go the remaining distance at DRIVE_SPEED
-  chassis.pid_wait();
-}
-
-///
-// Swing Example
-///
-void swing_example() {
-  // The first parameter is ez::LEFT_SWING or ez::RIGHT_SWING
-  // The second parameter is the target in degrees
-  // The third parameter is the speed of the moving side of the drive
-  // The fourth parameter is the speed of the still side of the drive, this allows for wider arcs
-
-  chassis.pid_swing_set(ez::LEFT_SWING, 45_deg, SWING_SPEED, 45);
-  chassis.pid_wait();
-
-  chassis.pid_swing_set(ez::RIGHT_SWING, 0_deg, SWING_SPEED, 45);
-  chassis.pid_wait();
-
-  chassis.pid_swing_set(ez::RIGHT_SWING, 45_deg, SWING_SPEED, 45);
-  chassis.pid_wait();
-
-  chassis.pid_swing_set(ez::LEFT_SWING, 0_deg, SWING_SPEED, 45);
-  chassis.pid_wait();
-}
-
-///
-// Motion Chaining
-///
-void motion_chaining() {
-  // Motion chaining is where motions all try to blend together instead of individual movements.
-  // This works by exiting while the robot is still moving a little bit.
-  // To use this, replace pid_wait with pid_wait_quick_chain.
-  chassis.pid_drive_set(24_in, DRIVE_SPEED, true);
-  chassis.pid_wait();
-
-  chassis.pid_turn_set(45_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  chassis.pid_turn_set(-45_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  chassis.pid_turn_set(0_deg, TURN_SPEED);
-  chassis.pid_wait();
-
-  // Your final motion should still be a normal pid_wait
-  chassis.pid_drive_set(-24_in, DRIVE_SPEED, true);
-  chassis.pid_wait();
-}
-
-void maxPos_Red(){
-
-  targetHue = blue;
-
-  // Drive to and hold mogo
-  chassis.pid_drive_set(-20_in, 80);
-  chassis.pid_wait_until(-10_in);
-  chassis.pid_speed_max_set(60);
-  chassis.pid_wait_quick_chain();
-  retractMogo();
-  pros::delay(300);
-
-  // Turn to rush rings
-  chassis.pid_turn_set(158_deg, TURN_SPEED);
-  chassis.pid_wait();
-  intake.move_voltage(12000);
-  // jamEnabled = true;
-
-  // Doinker 1st ring
-  chassis.pid_drive_set(18_in, 60);
-  chassis.pid_wait();
-  doinkerL.set(true);
-  pros::delay(500);
-  intake.move_voltage(0);
-
-  // Back up
-  chassis.pid_drive_set(-5_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-  chassis.pid_turn_set(175_deg, TURN_SPEED);
-  chassis.pid_wait();
-
-  // Doinker 2nd ring
-  chassis.pid_drive_set(12_in, 70);
-  chassis.pid_wait();
-  doinkerR.set(true);
-  pros::delay(500);                             
-
-  // Back up
-  chassis.pid_drive_set(-30_in, DRIVE_SPEED);
-  chassis.pid_wait();
-  doinkerL.set(false);
-  doinkerR.set(false);
-
-  // Position for swing 
-  intake.move_velocity(12000);
-  chassis.pid_turn_set(130_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-  chassis.pid_drive_set(3_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-
-  // Swing and intake 2nd & 3rd rings
-  chassis.pid_swing_set(ez::LEFT_SWING, 290_deg, 50, 5);
-  chassis.pid_wait_quick_chain();
-  chassis.pid_swing_set(ez::LEFT_SWING, 330_deg, 50, 5);
-  chassis.pid_wait();
-  pros::delay(500);
-
-  // Move to and intake 4th ring
-  chassis.pid_turn_set(310_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-  chassis.pid_drive_set(20_in, DRIVE_SPEED);
-  chassis.pid_wait();
-  pros::delay(500);
-  
-  // Move to corner & clear corner
-  chassis.pid_turn_set(0_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-  chassis.pid_drive_set(55_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-  intake.move_velocity(0);
-
-  doinkerR.set(true);
-  pros::delay(300);
-  chassis.pid_drive_set(10_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-  chassis.pid_turn_set(50_deg, TURN_SPEED);
-  chassis.pid_wait();
-  doinkerR.set(false);
-
-  // Intake 5th ring
-  // chassis.pid_turn_set(0_deg, TURN_SPEED, ez::counterclockwise);
-  // chassis.pid_wait_quick_chain();
-  // chassis.pid_drive_set(5_in, DRIVE_SPEED);
-  // chassis.pid_wait();
-
-  // chassis.pid_wait();
-  // pros::delay(300);
-
-  // // Back up
-  // chassis.pid_drive_set(-10_in, DRIVE_SPEED);
-  // chassis.pid_wait_quick_chain();
-
-  // // Clear corner
-  // doinkerR.set(true);
-  // pros::delay(300);
-  // chassis.pid_drive_set(10_in, DRIVE_SPEED);
-  // chassis.pid_wait_quick_chain();
-  // chassis.pid_turn_set(50_deg, TURN_SPEED);
-  // chassis.pid_wait();
-  // doinkerR.set(false);
-
-  pros::delay(500);
-  intake.move_velocity(0);
-  // jamEnabled = false;
+    // Spit out blue
+    targetHue = blue;
+    extendMogo();
+
+    // --------- 1ST CORNER --------- //
+
+    // Score preload on alliance stake
+    intake.move_voltage(12000);
+    pros::delay(200);
+
+    // Move to first mogo
+    chassis.setPose(-60, 0, 90);
+    chassis.moveToPoint(-47, 0, 2000);
+    chassis.turnToHeading(0, 500);
+    chassis.moveToPoint(-47.382, -23.65, 2000, {.forwards = false});
+    chassis.waitUntilDone();
+    intake.move_voltage(0);
+
+    // Clamp mogo
+    retractMogo();
+    pros::delay(200);
+    intake.move_voltage(-12000);
+
+    // Move to and intake 1st ring
+    chassis.moveToPoint(-23.565, -23.444, 2000, {.maxSpeed = 127, .earlyExitRange = 1});
+    pros::delay(200);
+    intake.move_voltage(12000);
+
+    // Move to and intake 2nd ring
+    chassis.moveToPoint(27.735, -49.162, 2000, {.maxSpeed = 100});
+    pros::delay(300);
+
+    // Move to center line & set LB loading position
+    chassis.moveToPoint(1.3, -38, 2000, {.forwards = false});
+    nextState(); // Loading state
+
+    // Turn towards wall stake & set LB ready position
+    chassis.turnToHeading(180, 500);
+
+    intake.move_voltage(0);
+    intake.move_relative(-150, 127);
+    nextState(); // Ready state
+    pros::delay(200);
+    intake.move_voltage(12000);
+
+    // Move to wall stake and intake 3rd ring
+    chassis.moveToPoint(1.3, -61, 2000, {.maxSpeed = 80});
+    pros::delay(800);
+
+    nextState(); // Scored state
+    pros::delay(100);
+    chassis.turnToHeading(185, 500);
+
+    chassis.moveToPoint(-1.3, -47, 2000, {.forwards = false});
+    chassis.turnToHeading(270, 1000);
+    nextState(); // Resting state
+
+    // Intake 4, 5, 6th rings
+    chassis.moveToPoint(-40, -47, 1000, {.maxSpeed = 80, .earlyExitRange = 1});
+    chassis.moveToPoint(-60.5, -47, 1000, {.maxSpeed = 50});
+
+    // Intake 7th ring
+    chassis.turnToHeading(130, 500);
+    chassis.moveToPoint(-43, -58, 1000);
+    pros::delay(300);
+
+    // Drop off goal in corner
+    chassis.turnToHeading(90, 500);
+    chassis.moveToPoint(-57.232, -62.6, 1000, {.forwards = false});
+    chassis.waitUntilDone();
+    intake.move_voltage(-12000);
+    extendMogo();
+    pros::delay(500);
+
+    chassis.moveToPoint(-56, -50, 500, {.earlyExitRange = 1});
+
+    // --------- 2ND CORNER --------- //
+
+    // Move to ring
+    chassis.moveToPoint(31.58, -44.676, 1500, {.maxSpeed = 127, .earlyExitRange = 1});
+    chassis.moveToPose(45, -44.7, 90, 1000, {.maxSpeed = 80});
+
+    // nextState(); // Loading state
+
+    // Move to and clamp mogo
+    chassis.turnToHeading(210, 500);
+    chassis.moveToPoint(60.85, -20.597, 2000, {.forwards = false, .maxSpeed = 90});
+    chassis.waitUntilDone();
+
+    retractMogo();
+
+    // Move to position for corner
+    chassis.moveToPoint(40.5, -42.5, 1000);
+    chassis.turnToHeading(310, 1000);
+    chassis.waitUntilDone();
+    extendMogo();
+
+    // Move forward a bit
+    chassis.moveToPoint(34, -36.5, 800);
+    chassis.waitUntilDone();
+    retractMogo();
+
+    // Back up into corner
+    chassis.moveToPoint(58.396, -59.191, 1000, {.forwards = false});
+    intake.move_velocity(12000);
+    
+    // Turn to 3rd mogo
+    chassis.moveToPoint(48.441, -36.33, 2000);
+    chassis.turnToHeading(180, 700);
+    chassis.waitUntilDone();
+    extendMogo();
+
+    // Move to 3rd mogo
+    chassis.moveToPoint(48.441, 1, 2000, {.forwards = false, .maxSpeed = 80}); 
+    chassis.waitUntilDone();
+    retractMogo();
+    pros::delay(200);
+
+    // --------- 3RD CORNER --------- //
+
+    // Intake 1st ring
+    chassis.moveToPoint(23.524, -24.932, 2000);
+    chassis.waitUntilDone();
+    pros::delay(200);
+    intake.move_voltage(0);
+
+    // Move to 3rd quad & intake 2, 3, 4th rings
+    chassis.turnToHeading(-45, 500);
+    chassis.moveToPoint(-11.539, 12.015, 1000, {.maxSpeed = 100, .earlyExitRange = 1});
+    chassis.moveToPoint(-47, 47, 2000, {.maxSpeed = 50});
+    pros::delay(500);
+    intake.move_voltage(12000);
+    chassis.waitUntilDone();
+    pros::delay(500);
+
+    // Move to and intake 5th ring
+    chassis.turnToHeading(-90, 50);
+    chassis.moveToPoint(-60, 47, 1000);
+    pros::delay(300);
+
+    // Move to and intake 6th ring
+    chassis.moveToPoint(-43.5, 61.5, 1000);
+    pros::delay(300);
+
+    // Move to corner and deposit goal
+    chassis.turnToHeading(110, 500);
+    chassis.moveToPoint(-59, 62.8, 1000, {.forwards = false});
+    chassis.waitUntilDone();
+    pros::delay(500);
+    intake.move_velocity(-12000);
+    extendMogo();
+    pros::delay(500);
+
+    // --------- 4TH CORNER --------- //
+
+    // Move to 1st ring
+    chassis.moveToPoint(-23.683, 47.224, 2000);
+    pros::delay(200);
+    intake.move_voltage(12000);
+
+    // Turn towards mogo
+    chassis.turnToHeading(40, 500);
+    intake.move_voltage(0);
+
+    // Move to and clamp 4th mogo
+    chassis.moveToPoint(-49.395, 21.229, 2000, {.forwards = false, .maxSpeed = 80});
+    chassis.waitUntilDone();
+
+    // Clamp mogo
+    retractMogo();
+    pros::delay(200);
+    nextState(); // Loading state
+
+    // Move to wall stake
+    chassis.moveToPoint(1, 43.3, 2000);                                 
+    intake.move_voltage(12000);
+    chassis.waitUntilDone();
+
+    // Turn to wall stake
+    chassis.turnToHeading(0, 600);
+
+    // Set LB to ready
+    intake.move_voltage(0);
+    intake.move_relative(-150, 127);
+    nextState(); // Ready state
+    pros::delay(200);
+    intake.move_voltage(12000);
+
+    // Move to wall stake, score, and intake 1st ring
+    chassis.moveToPoint(1, 61.5, 1000, {.maxSpeed = 80});    
+    chassis.waitUntilDone();
+
+    nextState(); // Scored state
+    pros::delay(800);
+
+    // Back up
+    chassis.moveToPoint(1, 46.985, 1000, {.forwards = false});     
+    chassis.waitUntilDone();
+    nextState();
+
+    // Turn and move to 2nd ring
+    chassis.turnToHeading(90, 500);
+    chassis.moveToPoint(23.524, 46.985, 1000);
+    chassis.waitUntilDone();
+    pros::delay(200);
+
+    // Turn and move to 3rd ring
+    chassis.turnToHeading(180, 500);
+    chassis.moveToPoint(23.524, 23.501, 1000);
+    chassis.waitUntilDone();
+    pros::delay(200);
+
+    // Turn and move to 4th ring
+    chassis.turnToHeading(55, 500);
+    chassis.moveToPoint(47.247, 46.985, 1000, {.maxSpeed = 70, .earlyExitRange = 1});
+
+    // Turn and move to 5th ring
+    chassis.turnToHeading(95, 500);
+    chassis.moveToPoint(58, 45.013, 1000);
+    chassis.waitUntilDone();
+    pros::delay(100);
+
+    // Turn and move to 6th ring
+    chassis.turnToHeading(325, 500);
+    chassis.moveToPoint(46.527, 59.917, 1000);
+    chassis.waitUntilDone();
+    pros::delay(1000);
+
+    // Turn to corner
+    chassis.turnToHeading(240, 500);
+    chassis.waitUntilDone();
+    intake.move_velocity(-12000);
+    extendMogo();
+
+    // Back up into corner & drop off mogo
+    chassis.moveToPoint(37.97, 55.595, 1000);
+    chassis.waitUntilDone();
+    retractMogo();
+
+    chassis.moveToPoint(53.151, 65.713, 1300, {.forwards = false});
+    chassis.moveToPoint(37.97, 55.595, 1000);
+
+    // --------- HANG --------- //
+
+    // Move in front of ladder
+    chassis.moveToPoint(21.383, 20.234, 2000, {.earlyExitRange = 1});
+
+    // Turn backwrds
+    chassis.turnToHeading(40, 500);
+    chassis.waitUntilDone();
+    nextState(); // loading state
+    nextState(); // ready state
+    nextState(); // scored state
+
+    // Hang
+    chassis.moveToPoint(9.537, 8.39, 2000, {.forwards = false, .maxSpeed = 30});
+    pros::delay(400);
+    chassis.moveToPoint(17.577, 16.428, 1000, {.maxSpeed = 30});
+    chassis.waitUntilDone();
+
+    // hang.retract();
 
 }
 
-// HELP HELP HELP HELP HELP HELP
-void maxPos_Blue(){
+void R_P_ringrush(){
 
-  targetHue = red;
+    // Spit out blue
+    targetHue = blue;
+    extendMogo();
+    doinkerR.extend();
+    pros::delay(200);
 
-  // Drive to and hold mogo
-  chassis.pid_drive_set(-20_in, 80);
-  chassis.pid_wait_until(-10_in);
-  chassis.pid_speed_max_set(60);
-  chassis.pid_wait_quick_chain();
-  retractMogo();
-  pros::delay(300);
+    // Doinker top ring and back up
+    chassis.setPose(-54, -13, 0);
+    chassis.moveToPoint(-54, -27, 2000, {.forwards = false, .maxSpeed = 50});
+    chassis.waitUntilDone();
 
-  // Turn to rush rings
-  chassis.pid_turn_set(-160_deg, TURN_SPEED);
-  chassis.pid_wait();
-  intake.move_voltage(12000);
-  // jamEnabled = true;
+    // Intake 1st ring
+    doinkerR.retract();
+    intake.move_voltage(12000);
+    chassis.moveToPoint(-48, -13, 500);
+    
+    // Turn to mogo
+    chassis.turnToHeading(-67, 500);
 
-  // Doinker 1st ring
-  chassis.pid_drive_set(20_in, 60);
-  chassis.pid_wait();
-  doinkerR.set(true);
-  pros::delay(500);
-  intake.move_voltage(0);
+    chassis.moveToPoint(-24.058, -23.397, 1500, {.forwards = false});
+    intake.move_voltage(0);
+    chassis.waitUntilDone();
 
-  // Back up
-  chassis.pid_drive_set(-5_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-  chassis.pid_turn_set(-177_deg, TURN_SPEED);
-  chassis.pid_wait();
+    // Clamp 2nd mogo
+    retractMogo();
+    intake.move_voltage(12000);
+    pros::delay(200);
 
-  // Doinker 2nd ring
-  chassis.pid_drive_set(12_in, 70);
-  chassis.pid_wait();
-  doinkerL.set(true);
-  pros::delay(500);                             
+    // Move to 2nd ring 
+    chassis.turnToHeading(50, 500);
+    chassis.moveToPoint(-11, -4, 1000);
+    pros::delay(400);
+    intake.move_voltage(0);
+    chassis.waitUntilDone();
 
-  // Back up
-  chassis.pid_drive_set(-35_in, DRIVE_SPEED);
-  chassis.pid_wait();
-  doinkerL.set(false);
-  doinkerR.set(false);
+    chassis.turnToHeading(55, 500);
+    chassis.waitUntilDone();
 
-  // Position for swing 
-  intake.move_velocity(12000);
-  chassis.pid_turn_set(-130_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-  chassis.pid_drive_set(3_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
+    doinkerR.extend();
+    pros::delay(400);
 
-  // Swing and intake 2nd & 3rd rings
-  chassis.pid_swing_set(ez::RIGHT_SWING, -290_deg, 50, 5);
-  chassis.pid_wait_quick_chain();
-  chassis.pid_swing_set(ez::RIGHT_SWING, -330_deg, 50, 5);
-  chassis.pid_wait();
-  pros::delay(500);
+    // Move to 3rd ring
+    chassis.turnToHeading(74, 500);
+    chassis.moveToPoint(-6.25, -5, 500);
+    chassis.waitUntilDone();
 
-  // Move to and intake 4th ring
-  chassis.pid_turn_set(-310_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-  chassis.pid_drive_set(20_in, DRIVE_SPEED);
-  chassis.pid_wait();
-  pros::delay(500);
-  
-  // Move to corner
-  chassis.pid_turn_set(-350_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-  chassis.pid_drive_set(40_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-  intake.move_velocity(0);
+    doinkerL.extend();
+    pros::delay(400);
 
-  // doinkerL.set(true);
-  // pros::delay(300);
-  // chassis.pid_drive_set(10_in, DRIVE_SPEED);
-  // chassis.pid_wait_quick_chain();
-  // chassis.pid_turn_set(-310_deg, TURN_SPEED);
-  // chassis.pid_wait();
-  // doinkerL.set(false);
+    // Move back
+    chassis.turnToHeading(60, 500);
+    chassis.moveToPoint(-37.5, -49, 3000, {.forwards = false});
+    chassis.waitUntilDone();
+    doinkerR.retract();
+    doinkerL.retract();
 
-  // // Intake 5th ring
-  // chassis.pid_turn_set(0_deg, TURN_SPEED, ez::counterclockwise);
-  // chassis.pid_wait_quick_chain();
-  // chassis.pid_drive_set(5_in, DRIVE_SPEED);
-  // chassis.pid_wait();
+    // Swing to intake 2, 3, 4th ring
+    intake.move_voltage(12000);
+    chassis.turnToHeading(70, 500);
+    chassis.moveToPoint(-26.6, -45.5, 1000, {.earlyExitRange = 1});
 
-  // chassis.pid_wait();
-  // pros::delay(300);
+    chassis.moveToPoint(-36.2, -34.7, 1000, {.earlyExitRange = 1});
+    chassis.moveToPoint(-60, -40, 1000);
+    chassis.waitUntilDone();
 
-  // // Back up
-  // chassis.pid_drive_set(-10_in, DRIVE_SPEED);
-  // chassis.pid_wait_quick_chain();
-
-  // // Clear corner
-  // doinkerR.set(true);
-  // pros::delay(300);
-  // chassis.pid_drive_set(10_in, DRIVE_SPEED);
-  // chassis.pid_wait_quick_chain();
-  // chassis.pid_turn_set(50_deg, TURN_SPEED);
-  // chassis.pid_wait();
-  // doinkerR.set(false);
-
-  pros::delay(500);
-  jamEnabled = false;
+    // Turn and move to corner
+    chassis.turnToHeading(185, 500);
+    chassis.moveToPoint(-60.758, -50, 1000);
+    doinkerR.extend();
 }
 
-void maxNeg_Blue(){
+// Working
+void B_P_ringrush(){
 
-  lbTaskEnabled = false;
+    // Spit out red
+    targetHue = red;
 
-  targetHue = red;
-  // jamEnabled = true;
+    extendMogo();
+    doinkerL.extend();
+    pros::delay(200);
 
-  // Score alliance stake
-  ladybrown_Left.move_absolute(1200, 127);
-  ladybrown_Right.move_absolute(1200, 127);
-  pros::delay(600);
-  lbTaskEnabled = true;
+    // Doinker top ring and back up
+    chassis.setPose(54, -13, 0);
+    chassis.moveToPoint(54, -27, 2000, {.forwards = false, .maxSpeed = 30});
+    chassis.waitUntilDone();
 
-  // Drive to and clamp mogo
-  chassis.pid_turn_set(-57_deg, TURN_SPEED, ez::counterclockwise);
-  chassis.pid_wait();
+    // Intake 1st ring
+    doinkerL.retract();
+    intake.move_voltage(12000);
+    chassis.moveToPoint(48, -13, 500);
+    
+    // Turn to mogo
+    chassis.turnToHeading(60, 500);
+    chassis.moveToPoint(24.058, -23.397, 1500, {.forwards = false});
+    pros::delay(200);
+    intake.move_voltage(0);
+    chassis.waitUntilDone();
 
-  extendMogo();
-  chassis.pid_drive_set(-35_in, DRIVE_SPEED);
-  chassis.pid_wait_until(-15_in);
-  chassis.pid_speed_max_set(60);
-  chassis.pid_wait_quick_chain();
-  retractMogo();
-  pros::delay(300);
+    // Clamp 2nd mogo
+    retractMogo();
+    pros::delay(200);
+    intake.move_voltage(12000);
 
-  // Drive to and collect 1st & 2nd rings
-  chassis.pid_turn_set(150_deg, TURN_SPEED);
-  chassis.pid_wait();
+    // Move to 2nd ring 
+    chassis.turnToHeading(-50, 500);
+    chassis.moveToPoint(10, -3, 1000);            
+    pros::delay(300);
+    intake.move_voltage(0);
+    pros::delay(500);
+    intake.move_voltage(-12000);
 
-  intake.move_voltage(12000);
-  chassis.pid_drive_set(10_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
-  chassis.pid_swing_set(ez::LEFT_SWING, 200_deg, 60, 5);
-  chassis.pid_wait_quick_chain();
+    chassis.moveToPoint(15, -6, 500, {.forwards = false});     
 
-  chassis.pid_drive_set(20_in, 70);
-  chassis.pid_wait();
-  pros::delay(300);
+    chassis.turnToHeading(310, 500);       
+    chassis.waitUntilDone();
 
-  chassis.pid_drive_set(-5_in, DRIVE_SPEED);
-  chassis.pid_wait_quick_chain();
+    doinkerL.extend();
+    pros::delay(400);
 
-  // Drive to and intake 3rd ring
-  chassis.pid_turn_set(290_deg, TURN_SPEED);
-  chassis.pid_wait_quick_chain();
-  chassis.pid_drive_set(10_in, DRIVE_SPEED);
-  chassis.pid_wait();
+    // Move to 3rd ring
+    chassis.turnToHeading(285, 500);            
+    chassis.moveToPoint(6.25, -5, 500);
+    chassis.waitUntilDone();
 
-  // Drive to and score on wall stake
-  chassis.pid_turn_set(155_deg, TURN_SPEED, ez::counterclockwise);
-  chassis.pid_wait();
-  intake.move_velocity(0);
-  // Drive to and collect 4th & 5th rings
+    doinkerR.extend();
+    pros::delay(400);
 
+    // Move back
+    chassis.moveToPoint(37.5, -49, 3000, {.forwards = false});
+    chassis.waitUntilDone();
+    doinkerR.retract();
+    doinkerL.retract();
 
+    // Swing to intake 2, 3, 4th ring
+    intake.move_voltage(12000);
+    chassis.turnToHeading(290, 500);
+    chassis.moveToPoint(27.5, -45.5, 1000, {.earlyExitRange = 1});
 
-  pros::delay(500);
+    chassis.moveToPoint(36.2, -34.7, 1000, {.earlyExitRange = 1});
+    chassis.moveToPoint(60, -40, 1000);
+    chassis.waitUntilDone();
+
+    // Turn and move to corner
+    chassis.turnToHeading(175, 500);
+    chassis.moveToPoint(60.758, -50, 1000);
+    doinkerL.extend();
+}
+
+void R_N_ringrush(){
 
 }
 
-void maxNeg_Red(){}
+// unfinished
+void B_N_ringrush(){
+
+    // Spit out red
+    targetHue = red;
+
+    extendMogo();
+    intake.move_voltage(12000);
+
+    chassis.setPose(51.379, 25.88, 292);
+
+    // Drive to 4 stack
+    chassis.moveToPoint(12.186, 41.4, 2000);
+    doinkerR.extend();
+
+    // Back up
+    chassis.turnToHeading(310, 500);
+    chassis.moveToPoint(34, 33.767, 2000, {.forwards = false, .earlyExitRange = 1});
+    doinkerR.retract();
+
+    chassis.moveToPose(39, 32.5, 270, 2000, {.forwards = false});
+    chassis.waitUntilDone();
+
+    // Drive to and clamp mogo
+    chassis.turnToHeading(50, 500);
+    chassis.moveToPoint(23.68, 23.822, 1000, {.forwards = false});
+    intake.move_voltage(0);
+    chassis.waitUntilDone();
+
+    retractMogo();
+    pros::delay(200);
+    intake.move_voltage(12000);
+
+    // 
+
+    //
+    pros::delay(2000);
+    intake.move_voltage(0);
+}
+
+void B_N_halfSAWP(){
+
+    // Spit out red
+    targetHue = red;
+
+    extendMogo();
+    chassis.setPose(51.387, 9.5, 115);
+    nextState(); // Loading state
+
+    // Move forward
+    chassis.moveToPoint(58.5, 9, 1000);
+
+    // Load preload
+    intake.move_voltage(12000); 
+    pros::delay(1500);
+    intake.move_relative(-250, -127);
+    intake.move_voltage(0);
+
+    // Score alliance stake
+    lbTaskEnabled = false;
+    lb.move_relative(1700, 127);
+    pros::delay(1500);
+    
+    // Move to mogo
+    chassis.moveToPoint(22.734, 24.017, 2000, {.forwards = false, .maxSpeed = 90});
+    intake.move_voltage(-12000);
+    chassis.waitUntilDone();
+    retractMogo();
+    
+    lbTaskEnabled = true;
+
+    nextState(); // Ready state
+    nextState(); // Scored state
+    nextState(); // Resting state
+
+    pros::delay(500);
+
+    // Turn toward 4-stack
+    chassis.turnToHeading(320, 700);
+    intake.move_voltage(12000);
+
+    // Move to and intake 1st & 2nd rings
+    chassis.moveToPoint(7.5, 38.724, 1500, {.maxSpeed = 80, .earlyExitRange = 1});
+    chassis.turnToHeading(0, 500);
+    chassis.moveToPoint(7, 50.5, 1000, {.maxSpeed = 80});
+    chassis.waitUntilDone();
+    pros::delay(200);
+
+    // Move to and intake 3rd ring
+    chassis.turnToHeading(100, 700);
+    intake.move_velocity(0);
+    chassis.waitUntilDone();
+    chassis.moveToPoint(25.14, 46.984, 1300);
+    intake.move_velocity(12000);
+    pros::delay(300);
+
+    // Turn and move to ladder
+    chassis.turnToHeading(180, 500);
+    chassis.moveToPoint(25.14, 7, 2000, {.maxSpeed = 100});
+    chassis.waitUntilDone();
+    intake.move_velocity(0);
+}
+
+void R_N_halfSAWP(){
+
+    // Spit out blue
+    targetHue = blue;
+
+    extendMogo();
+    chassis.setPose(-51.387, 9.5, 245);
+
+    nextState(); // Loading state
+
+    // Move forward
+    chassis.moveToPoint(-58.5, 9, 1000);
+
+    // Load preload
+    intake.move_voltage(12000); 
+    pros::delay(1500);
+    intake.move_relative(-250, -127);
+    intake.move_voltage(0);
+
+    // Score alliance stake
+    lbTaskEnabled = false;
+    lb.move_relative(1700, 127);
+    pros::delay(1500);
+    
+    // Move to mogo
+    chassis.moveToPoint(-22.734, 24.017, 2000, {.forwards = false, .maxSpeed = 90});
+    intake.move_voltage(-12000);
+    chassis.waitUntilDone();
+    retractMogo();
+    
+    lbTaskEnabled = true;
+
+    nextState(); // Ready state
+    nextState(); // Scored state
+    nextState(); // Resting state
+
+    pros::delay(500);
+
+    // Turn toward 4-stack
+    chassis.turnToHeading(45, 700);
+    intake.move_voltage(12000);
+
+    // Move to and intake 1st & 2nd rings
+    chassis.moveToPoint(-7.5, 38.724, 1500, {.maxSpeed = 80, .earlyExitRange = 1});
+    chassis.turnToHeading(0, 500);
+    chassis.moveToPoint(-7, 50.5, 1000, {.maxSpeed = 80});
+    chassis.waitUntilDone();
+    pros::delay(200);
+
+    // Move to and intake 3rd ring
+    chassis.turnToHeading(260, 700);
+    intake.move_velocity(0);
+    chassis.waitUntilDone();
+    chassis.moveToPoint(-25.14, 46.984, 1300);
+    intake.move_velocity(12000);
+    pros::delay(300);
+
+    // Turn and move to ladder
+    chassis.turnToHeading(180, 500);
+    chassis.moveToPoint(-25.14, 7, 2000, {.maxSpeed = 100});
+    chassis.waitUntilDone();
+    intake.move_velocity(0);
+}
